@@ -27,8 +27,8 @@ def concat_images_and_heatmaps(images, cls_logits, ctr_logits, mask_logits, targ
     resized_images = F.interpolate(images, size=cls_logits.shape[2:]) # [num_batch, 3, H, W] -> [num_batch, 3, h, w]
 
     # Create colored heatmaps from class predictions
-    heatmaps = torch.ones_like(cls_logits[:,label:label+1,:,:], device=device)
-    heatmaps = heatmaps.repeat(1, 3, 1, 1) # [num_batch, 1, h, w] -> [num_batch, 3, h, w]
+    heatmaps = torch.ones(size=(num_batch, 3, feature_height, feature_width), device=device)
+    maskmaps = torch.zeros_like(heatmaps)
 
     for i in range(num_batch):
         # Skip if no object in targets
@@ -47,13 +47,15 @@ def concat_images_and_heatmaps(images, cls_logits, ctr_logits, mask_logits, targ
         # Draw peak
         topk = 10
         labels, preds, points = get_heatmap_peaks(cls_logits[i:i+1], topk)
-        # for no_obj in range(topk):
-        #     heatmaps[i,0,points[0,no_obj,1],points[0,no_obj,0]] = 0
+        for no_obj in range(topk):
+            heatmaps[i,0,points[0,no_obj,1],points[0,no_obj,0]] = 0
 
         # Draw mask
         masks = model.generate_mask(ctr_logits[i], mask_logits[i], points[0])
         for no_obj in range(topk):
-            heatmaps[i,0,:,:] = torch.minimum(heatmaps[i,0,:,:], 1 - masks[no_obj])
+            maskmaps[i,0,:,:] = torch.maximum(maskmaps[i,0,:,:], masks[no_obj] * (float(no_obj+1)%8/7))
+            maskmaps[i,1,:,:] = torch.maximum(maskmaps[i,1,:,:], masks[no_obj] * (float(no_obj+1)%4/3))
+            maskmaps[i,2,:,:] = torch.maximum(maskmaps[i,2,:,:], masks[no_obj] * (float(no_obj+1)%2/1))
 
     heatmaps[:,1:2,:,:] -= cls_logits[:,label:label+1,:,:].sigmoid() # subtract green
     heatmaps[:,2:3,:,:] -= cls_logits[:,label:label+1,:,:].sigmoid() # subtract blue
@@ -62,7 +64,7 @@ def concat_images_and_heatmaps(images, cls_logits, ctr_logits, mask_logits, targ
     factor = torch.as_tensor([0.229, 0.224, 0.225], device=device)[None,:,None,None].expand(resized_images.shape)
     offset = torch.as_tensor([0.485, 0.456, 0.406], device=device)[None,:,None,None].expand(resized_images.shape)
 
-    images_and_heatmaps = torch.cat([resized_images * factor + offset, heatmaps])
+    images_and_heatmaps = torch.cat([resized_images * factor + offset, heatmaps, maskmaps])
     return images_and_heatmaps
 
 class LitCenterNet(pl.LightningModule):
