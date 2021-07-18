@@ -36,7 +36,7 @@ def concat_images_and_heatmaps(images, cls_logits, targets, label=1):
         # Downsample GT masks
         gt_masks = F.interpolate(gt_masks[None,...], size=(feature_height, feature_width)) # Tensor[1, num_objects, feature_height, feature_width]
         gt_masks = gt_masks[0,...] # Tensor[num_objects, feature_height, feature_width]
-        gt_heatmaps = generate_heatmap(gt_labels, gt_masks, num_classes)
+        gt_heatmaps, _ = generate_heatmap(gt_labels, gt_masks, num_classes)
         heatmaps[i,0,:,:] -= gt_heatmaps[label,:,:]
 
     heatmaps[:,1:2,:,:] -= cls_logits[:,label:label+1,:,:].sigmoid() # subtract green
@@ -70,8 +70,8 @@ class LitCenterNet(pl.LightningModule):
         targets = [tgt for _, tgt in batch]
         images = torch.stack(images, dim=0)
 
-        cls_logits = self(images)
-        loss = self.centernet.loss(cls_logits, targets)
+        cls_logits, ctr_logits, mask_logits = self(images)
+        loss = self.centernet.loss(cls_logits, ctr_logits, mask_logits, targets)
 
         # TensorBoard
         if batch_idx % self.trainer.accumulate_grad_batches == 0:
@@ -92,8 +92,8 @@ class LitCenterNet(pl.LightningModule):
         targets = [tgt for _, tgt in batch]
         images = torch.stack(images, dim=0)
 
-        cls_logits = self(images)
-        loss = self.onenet.loss(cls_logits, targets)
+        cls_logits, ctr_logits, mask_logits = self(images)
+        loss = self.onenet.loss(cls_logits, ctr_logits, mask_logits, targets)
         return loss
 
     def configure_optimizers(self):
