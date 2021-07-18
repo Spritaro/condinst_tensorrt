@@ -86,6 +86,38 @@ def heatmap_focal_loss(preds, gt_heatmap, alpha, gamma):
     ).sum()
     return loss
 
+def get_heatmap_peaks(cls_logits, topk=100, kernel=3):
+    """
+    Params:
+        cls_logits: Tensor[num_batch, num_classes, height, width]
+        topk: Int
+        kernel: Int
+    Returns:
+        keep_labels: Tensor[num_batch, topk]
+        keep_cls_preds: Tensor[num_batch, topk]
+        keep_points: Tensor[num_batch, topk, (x, y)]
+    """
+    num_batch, num_classes, height, width = cls_logits.shape
+    device = cls_logits.device
+
+    # Get peak maps
+    heatmap_preds = cls_logits.sigmoid() # Tensor[num_batch, num_classes, height, width]
+    pad = (kernel - 1) // 2
+    heatmap_max = F.max_pool2d(heatmap_preds, (kernel, kernel), stride=1, padding=pad) # Tensor[num_batch, num_classes, height, width]
+    peak_map = (heatmap_max == heatmap_preds).float()
+    peak_map = peak_map * heatmap_preds
+    peak_map = peak_map.view(num_batch, -1) # Tensor[num_batch, (num_classes*height*width)]
+
+    # Get properties of each peak
+    cls_preds, keep_idx = torch.topk(peak_map, k=topk, dim=1) # [num_batch, topk], [num_batch, topk]
+    labels = torch.div(keep_idx, height*width, rounding_mode='floor').long() # [num_batch, topk]
+    yx_idx = torch.remainder(keep_idx, height*width).long() # [num_batch, topk]
+    ys = torch.div(yx_idx, width, rounding_mode='floor').long() # [num_batch, topk]
+    xs = torch.remainder(yx_idx, width).long() # [num_batch, topk]
+    points = torch.stack([xs, ys], dim=2) # Tensor[num_batch, topk, (x,y)]
+
+    return labels, cls_preds, points
+
 def dice_loss(inputs, targets, smooth=1):
     """
     Params:
@@ -143,21 +175,21 @@ class CenterNet(nn.Module):
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
             nn.BatchNorm2d(num_features=64),
             nn.ReLU(),
-            nn.Conv2d(in_channels=64, out_channels=num_classes, kernel_size=1, padding=1)
+            nn.Conv2d(in_channels=64, out_channels=num_classes, kernel_size=1, padding=0)
         )
 
         self.ctr_head = nn.Sequential(
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
             nn.BatchNorm2d(num_features=64),
             nn.ReLU(),
-            nn.Conv2d(in_channels=64, out_channels=num_channels, kernel_size=1, padding=1)
+            nn.Conv2d(in_channels=64, out_channels=num_channels, kernel_size=1, padding=0)
         )
 
         self.mask_head = nn.Sequential(
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
             nn.BatchNorm2d(num_features=64),
             nn.ReLU(),
-            nn.Conv2d(in_channels=64, out_channels=self.num_filters, kernel_size=1, padding=1)
+            nn.Conv2d(in_channels=64, out_channels=self.num_filters, kernel_size=1, padding=0)
         )
 
         # Initialize weight and bias for class head

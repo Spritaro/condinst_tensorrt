@@ -5,7 +5,7 @@ import pytorch_lightning as pl
 
 from torch.utils.tensorboard import SummaryWriter
 
-from centernet import CenterNet, generate_heatmap
+from centernet import CenterNet, generate_heatmap, get_heatmap_peaks
 from coco_category_id import category_id_to_label
 
 def concat_images_and_heatmaps(images, cls_logits, targets, label=1):
@@ -20,7 +20,7 @@ def concat_images_and_heatmaps(images, cls_logits, targets, label=1):
     num_batch, num_classes, feature_height, feature_width = cls_logits.shape
     device = images.device
 
-    resized_images = torch.nn.functional.interpolate(images, size=cls_logits.shape[2:]) # [num_batch, 3, H, W] -> [num_batch, 3, h, w]
+    resized_images = F.interpolate(images, size=cls_logits.shape[2:]) # [num_batch, 3, H, W] -> [num_batch, 3, h, w]
 
     # Create colored heatmaps from class predictions
     heatmaps = torch.ones_like(cls_logits[:,label:label+1,:,:], device=device)
@@ -30,14 +30,20 @@ def concat_images_and_heatmaps(images, cls_logits, targets, label=1):
         # Skip if no object in targets
         if len(targets[i]) == 0:
             continue
-        # Convert list of dicts to Tensors
-        gt_labels = torch.as_tensor([category_id_to_label[obj['category_id']] for obj in targets[i]], dtype=torch.int64, device=device) # Tensor[num_objects]
-        gt_masks = torch.stack([torch.as_tensor(obj['segmentation'], dtype=torch.float32, device=device) for obj in targets[i]], dim=0) # Tensor[num_objects, image_height, image_width]
-        # Downsample GT masks
-        gt_masks = F.interpolate(gt_masks[None,...], size=(feature_height, feature_width)) # Tensor[1, num_objects, feature_height, feature_width]
-        gt_masks = gt_masks[0,...] # Tensor[num_objects, feature_height, feature_width]
-        gt_heatmaps, _ = generate_heatmap(gt_labels, gt_masks, num_classes)
-        heatmaps[i,0,:,:] -= gt_heatmaps[label,:,:]
+
+        # # Convert list of dicts to Tensors
+        # gt_labels = torch.as_tensor([category_id_to_label[obj['category_id']] for obj in targets[i]], dtype=torch.int64, device=device) # Tensor[num_objects]
+        # gt_masks = torch.stack([torch.as_tensor(obj['segmentation'], dtype=torch.float32, device=device) for obj in targets[i]], dim=0) # Tensor[num_objects, image_height, image_width]
+        # # Downsample GT masks
+        # gt_masks = F.interpolate(gt_masks[None,...], size=(feature_height, feature_width)) # Tensor[1, num_objects, feature_height, feature_width]
+        # gt_masks = gt_masks[0,...] # Tensor[num_objects, feature_height, feature_width]
+        # gt_heatmaps, _ = generate_heatmap(gt_labels, gt_masks, num_classes)
+        # heatmaps[i,0,:,:] -= gt_heatmaps[label,:,:]
+
+        # Draw peak
+        labels, preds, points = get_heatmap_peaks(cls_logits[i:i+1], topk=10)
+        for no_obj in range(10):
+            heatmaps[i,0,points[0,no_obj,1],points[0,no_obj,0]] = 0
 
     heatmaps[:,1:2,:,:] -= cls_logits[:,label:label+1,:,:].sigmoid() # subtract green
     heatmaps[:,2:3,:,:] -= cls_logits[:,label:label+1,:,:].sigmoid() # subtract blue

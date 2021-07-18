@@ -37,9 +37,11 @@ if __name__ == '__main__':
     ann_path_val = os.path.expanduser('~/dataset/annotations_trainval2017/annotations/instances_val2017.json')
 
     dataset_train = CocoSegmentationAlb(root=root_dir_train, annFile=ann_path_train, transform=transform)
+    # dataset_train = CocoSegmentationAlb(root=root_dir_val, annFile=ann_path_val, transform=transform)
     dataset_val = CocoSegmentationAlb(root=root_dir_val, annFile=ann_path_val, transform=transform)
 
     coco_train = DataLoader(dataset_train, batch_size=4, collate_fn=lambda x: x)
+    # coco_train = DataLoader(dataset_val, batch_size=4, collate_fn=lambda x: x)
     coco_val = DataLoader(dataset_val, batch_size=4, collate_fn=lambda x: x)
 
     # Check dataset
