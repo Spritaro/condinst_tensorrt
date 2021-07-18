@@ -165,31 +165,52 @@ class CenterNet(nn.Module):
             nn.ReLU(),
             nn.Upsample(scale_factor=2, mode='bilinear'),
 
-            nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=64),
-            nn.ReLU(),
-            nn.Upsample(scale_factor=2, mode='bilinear'),
+            # nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, padding=1),
+            # nn.BatchNorm2d(num_features=64),
+            # nn.ReLU(),
+            # nn.Upsample(scale_factor=2, mode='bilinear'),
         )
 
         self.cls_head = nn.Sequential(
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=64),
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=128),
             nn.ReLU(),
-            nn.Conv2d(in_channels=64, out_channels=num_classes, kernel_size=1, padding=0)
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=128),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=128),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=128, out_channels=num_classes, kernel_size=1, padding=0)
         )
 
         self.ctr_head = nn.Sequential(
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=64),
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=128),
             nn.ReLU(),
-            nn.Conv2d(in_channels=64, out_channels=num_channels, kernel_size=1, padding=0)
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=128),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=128),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=128, out_channels=num_channels, kernel_size=1, padding=0)
         )
 
         self.mask_head = nn.Sequential(
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=64),
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=128),
             nn.ReLU(),
-            nn.Conv2d(in_channels=64, out_channels=self.num_filters, kernel_size=1, padding=0)
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=128),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=128),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=128),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=128, out_channels=self.num_filters, kernel_size=1, padding=0)
         )
 
         # Initialize weight and bias for class head
@@ -213,7 +234,7 @@ class CenterNet(nn.Module):
         x = self.backbone.layer3(x) # 1/16
         x = self.backbone.layer4(x) # 1/32
 
-        x = self.upsample(x) # -> 1/16 -> 1/8 -> 1/4
+        x = self.upsample(x) # -> 1/16 -> 1/8
 
         cls_logits = self.cls_head(x) # [num_batch, num_classes, h, w]
         ctr_logits = self.ctr_head(x) # [num_batch, num_channels, h, w]
@@ -222,8 +243,8 @@ class CenterNet(nn.Module):
         if self.training:
             return cls_logits, ctr_logits, mask_logits
         else:
-            cls_preds = self.keep_topk(cls_logits, self.topk)
-            return cls_preds
+            # TODO: Implement mask output
+            return cls_logits, ctr_logits, mask_logits
 
     def generate_mask(self, ctr_logits, mask_logits, centroids):
         """

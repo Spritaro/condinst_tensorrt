@@ -111,7 +111,11 @@ class LitCenterNet(pl.LightningModule):
         images = torch.stack(images, dim=0)
 
         cls_logits, ctr_logits, mask_logits = self(images)
-        loss = self.onenet.loss(cls_logits, ctr_logits, mask_logits, targets)
+        loss = self.centernet.loss(cls_logits, ctr_logits, mask_logits, targets)
+
+        # TensorBoard
+        self.writer.add_scalar("val_loss", loss, self.global_step)
+
         return loss
 
     def configure_optimizers(self):
