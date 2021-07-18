@@ -67,6 +67,24 @@ def generate_heatmap(gt_labels, gt_masks, num_classes, sigma=1.0):
 
     return heatmap
 
+def heatmap_focal_loss(preds, gt_heatmap, alpha, gamma):
+    """
+    Params:
+        preds: Tensor[num_classes, height, width]
+        gt_heatmap: Tensor[num_classes, height, width]
+        alpha:
+        gamma: how much you want to reduce penalty around the ground truth locations
+    Returns:
+        loss: Tensor[]
+    """
+    # See CornerNet paper for detail https://arxiv.org/abs/1808.01244
+    loss = -torch.where(
+        gt_heatmap == 1,
+        (1 - preds)**alpha * torch.log(preds), # Loss for positive locations
+        (1 - gt_heatmap) ** gamma * (preds)**alpha * torch.log(1 - preds) # loss for negative locations
+    ).sum()
+    return loss
+
 class CenterNet(nn.Module):
     def __init__(self, training, num_classes, topk=100):
         super().__init__()
@@ -165,7 +183,7 @@ class CenterNet(nn.Module):
 
             # Calculate loss
             num_objects, _, _ = gt_masks.shape
-            loss = sigmoid_focal_loss(cls_logits[i], gt_heatmap, alpha=0.25, gamma=2, reduction="sum") / num_objects # Tensor[num_objects, feature_height, feature_width] -> Tensor[]
+            loss = heatmap_focal_loss(cls_logits[i].sigmoid(), gt_heatmap, alpha=2, gamma=4) / num_objects
             losses.append(1 * loss)
 
         return torch.stack(losses, dim=0).mean()
