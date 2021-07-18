@@ -8,12 +8,16 @@ from torch.utils.tensorboard import SummaryWriter
 from centernet import CenterNet, generate_heatmap, get_heatmap_peaks
 from coco_category_id import category_id_to_label
 
-def concat_images_and_heatmaps(images, cls_logits, targets, label=1):
+def concat_images_and_heatmaps(images, cls_logits, ctr_logits, mask_logits, targets, model, label=1):
     """
     Params:
         images: Tensor[num_batch, 3, H, W]
-        cls_logits: Tensor[num_batch, num_classes, h, w]
+        cls_logits: Tensor[num_batch, num_classes, feature_height, feature_width]
+        ctr_logits: Tensor[num_batch, num_channels, feature_height, feature_width]
+        mask_logits: Tensor[num_batch, num_filters, feature_height, feature_width]
         targets:
+        model:
+        label:
     Returns:
         images_and_heatmaps: Tensor[num_batch*2, 3, h, w]
     """
@@ -41,9 +45,15 @@ def concat_images_and_heatmaps(images, cls_logits, targets, label=1):
         # heatmaps[i,0,:,:] -= gt_heatmaps[label,:,:]
 
         # Draw peak
-        labels, preds, points = get_heatmap_peaks(cls_logits[i:i+1], topk=10)
-        for no_obj in range(10):
-            heatmaps[i,0,points[0,no_obj,1],points[0,no_obj,0]] = 0
+        topk = 10
+        labels, preds, points = get_heatmap_peaks(cls_logits[i:i+1], topk)
+        # for no_obj in range(topk):
+        #     heatmaps[i,0,points[0,no_obj,1],points[0,no_obj,0]] = 0
+
+        # Draw mask
+        masks = model.generate_mask(ctr_logits[i], mask_logits[i], points[0])
+        for no_obj in range(topk):
+            heatmaps[i,0,:,:] = torch.minimum(heatmaps[i,0,:,:], 1 - masks[no_obj])
 
     heatmaps[:,1:2,:,:] -= cls_logits[:,label:label+1,:,:].sigmoid() # subtract green
     heatmaps[:,2:3,:,:] -= cls_logits[:,label:label+1,:,:].sigmoid() # subtract blue
@@ -85,7 +95,7 @@ class LitCenterNet(pl.LightningModule):
             self.writer.add_scalar("loss", loss, self.global_step)
 
             # Display heatmaps
-            images_and_heatmaps = concat_images_and_heatmaps(images, cls_logits, targets)
+            images_and_heatmaps = concat_images_and_heatmaps(images, cls_logits, ctr_logits, mask_logits, targets, self.centernet)
             img_grid = torchvision.utils.make_grid(images_and_heatmaps, nrow=images.shape[0])
             self.writer.add_image('heatmap_images', img_grid, global_step=self.global_step)
 
