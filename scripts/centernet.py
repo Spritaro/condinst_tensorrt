@@ -60,9 +60,9 @@ def generate_heatmap(gt_labels, gt_masks, num_classes, sigma=1.0):
         label = gt_labels[i]
         px = centroids[i][0]
         py = centroids[i][1]
-        sigma2 = gt_masks[i].sum() * 0.1 + 1e-9
-        sigma2 = float(sigma2.to(torch.device('cpu')).detach().numpy())
-        single_heatmap = torch.exp(-((location_x-px)**2 + (location_y-py)**2) / (2. * sigma2))
+        # sigma2 = gt_masks[i].sum() * 0.1 + 1e-9
+        # sigma2 = float(sigma2.to(torch.device('cpu')).detach().numpy())
+        single_heatmap = torch.exp(-((location_x-px)**2 + (location_y-py)**2) / (2. * sigma**2))
         # Take element-wise maximum in case of overlapping objects
         heatmap[label,:,:] = torch.maximum(heatmap[label,:,:], single_heatmap)
 
