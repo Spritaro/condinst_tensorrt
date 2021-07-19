@@ -259,39 +259,43 @@ class CenterNet(nn.Module):
         num_objects, _ = centroids.shape
         device = ctr_logits.device
 
+        # Absolute coordinates
+        location_x = torch.arange(0, width, 1, dtype=torch.float32, device=device) # Tensor[width]
+        location_y = torch.arange(0, height, 1, dtype=torch.float32, device=device) # Tensor[height]
+        location_y, location_x = torch.meshgrid(location_y, location_x) # Tensor[height, width], Tensor[height, width]
+        location_xs = location_x[None,:,:].repeat(num_objects, 1, 1) # Tensor[num_objects, height, width]
+        location_ys = location_y[None,:,:].repeat(num_objects, 1, 1) # Tensor[num_objects, height, width]
+
+        # Relative coordinates
+        location_xs -= centroids[:,0].view(-1,1,1) # Tensor[num_objects, height, width]
+        location_ys -= centroids[:,1].view(-1,1,1) # Tensor[num_objects, height, width]
+
         # Add relative coordinates to mask features
-        location_xs = []
-        location_ys = []
-        for no_obj in range(num_objects):
-            # Centroid point
-            px = centroids[no_obj,0]
-            py = centroids[no_obj,1]
-            # Relative coordinates
-            location_x = torch.arange(-px, width-px, 1, dtype=torch.float32, device=device) # Tensor[width]
-            location_y = torch.arange(-py, height-py, 1, dtype=torch.float32, device=device) # Tensor[height]
-            location_y, location_x = torch.meshgrid(location_y, location_x) # Tensor[height, width], Tensor[height, width]
-            location_xs.append(location_x)
-            location_ys.append(location_y)
-        location_xs = torch.stack(location_xs, dim=0) # Tensor[num_objects, height, width]
-        location_ys = torch.stack(location_ys, dim=0) # Tensor[num_objects, height, width]
-        mask_logits = mask_logits.repeat(num_objects,1,1,1)
-        x = torch.cat([mask_logits, location_xs[:,None,:,:], location_ys[:,None,:,:]], dim=1) # Tensor[num_objects, num_filters+2, feature_height, feature_width]
+        mask_logits = mask_logits[None,:,:,:].repeat(num_objects,1,1,1) # Tensor[num_objects, num_filters, height, width]
+        mask_logits = torch.cat([mask_logits, location_xs[:,None,:,:], location_ys[:,None,:,:]], dim=1) # Tensor[num_objects, num_filters+2, height, width]
 
         # Create instance-aware mask head
-        weights1 = ctr_logits[:self.conv1_w, py, px].view(self.num_filters,self.num_filters+2,1,1)
-        weights2 = ctr_logits[self.conv1_w:self.conv2_w, py, px].view(self.num_filters,self.num_filters,1,1)
-        weights3 = ctr_logits[self.conv2_w:self.conv3_w, py, px].view(1,self.num_filters,1,1)
-        biases1 = ctr_logits[self.conv3_w:self.conv1_b, py, px]
-        biases2 = ctr_logits[self.conv1_b:self.conv2_b, py, px]
-        biases3 = ctr_logits[self.conv2_b:self.conv3_b, py, px]
+        px = centroids[:,0] # Tensor[num_objects]
+        py = centroids[:,1] # Tensor[num_objects]
+        masks = []
+        for no_obj in range(num_objects):
+            weights1 = ctr_logits[:self.conv1_w, py[no_obj], px[no_obj]].view(self.num_filters,self.num_filters+2,1,1)
+            weights2 = ctr_logits[self.conv1_w:self.conv2_w, py[no_obj], px[no_obj]].view(self.num_filters,self.num_filters,1,1)
+            weights3 = ctr_logits[self.conv2_w:self.conv3_w, py[no_obj], px[no_obj]].view(1,self.num_filters,1,1)
+            biases1 = ctr_logits[self.conv3_w:self.conv1_b, py[no_obj], px[no_obj]]
+            biases2 = ctr_logits[self.conv1_b:self.conv2_b, py[no_obj], px[no_obj]]
+            biases3 = ctr_logits[self.conv2_b:self.conv3_b, py[no_obj], px[no_obj]]
 
-        # Apply mask head to mask features with relative coordinates
-        x = F.conv2d(x, weights1, biases1)
-        x = F.relu(x)
-        x = F.conv2d(x, weights2, biases2)
-        x = F.relu(x)
-        x = F.conv2d(x, weights3, biases3)
-        masks = F.sigmoid(x)
+            # Apply mask head to mask features with relative coordinates
+            x = mask_logits[no_obj:no_obj+1,:,:,:] # Tensor[1, num_filters+2, height, width]
+            x = F.conv2d(x, weights1, biases1)
+            x = F.relu(x)
+            x = F.conv2d(x, weights2, biases2)
+            x = F.relu(x)
+            x = F.conv2d(x, weights3, biases3)
+            mask = F.sigmoid(x)
+            masks.append(mask)
+        masks = torch.stack(masks, dim=0)
         return masks
 
     def loss(self, cls_logits, ctr_logits, mask_logits, targets):
