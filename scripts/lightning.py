@@ -68,18 +68,18 @@ def concat_images_and_heatmaps(images, cls_logits, ctr_logits, mask_logits, targ
     return images_and_heatmaps
 
 class LitCenterNet(pl.LightningModule):
-    def __init__(self, training, num_classes, topk=100):
+    def __init__(self, mode, num_classes, topk=100):
         super().__init__()
-        self.centernet = CenterNet(training, num_classes, topk)
+        self.centernet = CenterNet(mode, num_classes, topk)
 
         # TensorBoard
-        self.training = training
-        if self.training:
+        self.mode = mode
+        if self.mode == 'training':
             self.writer = SummaryWriter()
 
     def forward(self, images):
-        cls_logits = self.centernet(images)
-        return cls_logits
+        outputs = self.centernet(images)
+        return outputs
 
     def training_step(self, batch, batch_idx):
         # images, targets = batch
@@ -124,5 +124,5 @@ class LitCenterNet(pl.LightningModule):
 
     def on_train_end(self):
         # TensorBoard
-        if self.training:
+        if self.mode == 'training':
             self.writer.close()

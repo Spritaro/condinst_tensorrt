@@ -137,9 +137,10 @@ def dice_loss(inputs, targets, smooth=1):
     return 1 - dice
 
 class CenterNet(nn.Module):
-    def __init__(self, training, num_classes, topk=100):
+    def __init__(self, mode, num_classes, topk=40):
         super().__init__()
-        self.training = training
+        assert mode in ['training', 'inference']
+        self.mode = mode
         self.topk = topk
 
         self.num_filters = 8
@@ -240,11 +241,17 @@ class CenterNet(nn.Module):
         ctr_logits = self.ctr_head(x) # [num_batch, num_channels, h, w]
         mask_logits = self.mask_head(x) # [num_batch, num_filters, h, w]
 
-        if self.training:
+        if self.mode == 'training':
             return cls_logits, ctr_logits, mask_logits
         else:
-            # TODO: Implement mask output
-            return cls_logits, ctr_logits, mask_logits
+            labels, preds, points = get_heatmap_peaks(cls_logits, topk=self.topk)
+            num_batch, num_objects, _ = points.shape
+            masks = []
+            for i in range(num_batch):
+                mask = self.centernet.generate_mask(ctr_logits[i], mask_logits[i], points[0])
+                masks.append(mask)
+            masks = torch.stack(masks, dim=0)
+            return labels, preds, masks
 
     def generate_mask(self, ctr_logits, mask_logits, centroids):
         """

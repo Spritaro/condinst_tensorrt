@@ -61,8 +61,9 @@ if __name__ == '__main__':
         filename='centernet-condinst-{epoch:02d}-{step:06d}-{val_loss:.2f}',
     )
 
-    # Train model
-    model = LitCenterNet(training=True, num_classes=81)
+    # Create model for training
+    model = LitCenterNet(mode='training', num_classes=81)
+
     # model = LitCenterNet.load_from_checkpoint(
     #     'checkpoints/centernet-condinst-epoch=00-val_loss=0.00.ckpt',
     #     training=True, num_classes=81)
@@ -70,6 +71,7 @@ if __name__ == '__main__':
     # filepath = 'centernet.pt'
     # model.load_state_dict(torch.load(filepath)) # Load model
 
+    # Train model
     trainer = pl.Trainer(
         # max_epochs=1,
         max_epochs=6,
