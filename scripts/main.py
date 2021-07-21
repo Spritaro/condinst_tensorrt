@@ -88,4 +88,12 @@ if __name__ == '__main__':
     filepath = 'centernet.pt'
     torch.save(model.state_dict(), filepath)
 
+    # Load model for inference
+    filepath = 'centernet.pt'
+    model = LitCenterNet(mode='inference', num_classes=81)
+    model.load_state_dict(torch.load(filepath)) # Load model
 
+    # Export to ONNX
+    filepath = 'centernet.onnx'
+    input_sample = torch.randn((1, 3, 480, 640))
+    model.to_onnx(filepath, input_sample, export_params=True, opset_version=11)

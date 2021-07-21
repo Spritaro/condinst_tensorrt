@@ -109,10 +109,11 @@ def get_heatmap_peaks(cls_logits, topk=100, kernel=3):
     peak_map = peak_map.view(num_batch, -1) # Tensor[num_batch, (num_classes*height*width)]
 
     # Get properties of each peak
+    # NOTE: TensorRT7 does not support rounding_mode='floor' for toch.div()
     cls_preds, keep_idx = torch.topk(peak_map, k=topk, dim=1) # [num_batch, topk], [num_batch, topk]
-    labels = torch.div(keep_idx, height*width, rounding_mode='floor').long() # [num_batch, topk]
+    labels = torch.div(keep_idx, height*width).long() # [num_batch, topk]
     yx_idx = torch.remainder(keep_idx, height*width).long() # [num_batch, topk]
-    ys = torch.div(yx_idx, width, rounding_mode='floor').long() # [num_batch, topk]
+    ys = torch.div(yx_idx, width).long() # [num_batch, topk]
     xs = torch.remainder(yx_idx, width).long() # [num_batch, topk]
     points = torch.stack([xs, ys], dim=2) # Tensor[num_batch, topk, (x,y)]
 
@@ -267,8 +268,9 @@ class CenterNet(nn.Module):
         device = ctr_logits.device
 
         # Absolute coordinates
-        location_x = torch.arange(0, width, 1, dtype=torch.float32, device=device) # Tensor[width]
-        location_y = torch.arange(0, height, 1, dtype=torch.float32, device=device) # Tensor[height]
+        # NOTE: TensorRT7 does not support float range operation. Use cast instead.
+        location_x = torch.arange(0, width, 1, dtype=torch.int32, device=device).float() # Tensor[width]
+        location_y = torch.arange(0, height, 1, dtype=torch.int32, device=device).float() # Tensor[height]
         location_y, location_x = torch.meshgrid(location_y, location_x) # Tensor[height, width], Tensor[height, width]
         location_xs = location_x[None,:,:].repeat(num_objects, 1, 1) # Tensor[num_objects, height, width]
         location_ys = location_y[None,:,:].repeat(num_objects, 1, 1) # Tensor[num_objects, height, width]
@@ -286,21 +288,35 @@ class CenterNet(nn.Module):
         for no_obj in range(num_objects):
             px = centroids[no_obj,0] # Tensor[]
             py = centroids[no_obj,1] # Tensor[]
-            weights1 = ctr_logits[:self.conv1_w, py, px].view(self.num_filters,self.num_filters+2,1,1)
-            weights2 = ctr_logits[self.conv1_w:self.conv2_w, py, px].view(self.num_filters,self.num_filters,1,1)
-            weights3 = ctr_logits[self.conv2_w:self.conv3_w, py, px].view(1,self.num_filters,1,1)
+            weights1 = ctr_logits[:self.conv1_w, py, px].view(self.num_filters, self.num_filters+2, 1, 1)
+            weights2 = ctr_logits[self.conv1_w:self.conv2_w, py, px].view(self.num_filters, self.num_filters, 1, 1)
+            weights3 = ctr_logits[self.conv2_w:self.conv3_w, py, px].view(1, self.num_filters, 1, 1)
             biases1 = ctr_logits[self.conv3_w:self.conv1_b, py, px]
             biases2 = ctr_logits[self.conv1_b:self.conv2_b, py, px]
             biases3 = ctr_logits[self.conv2_b:self.conv3_b, py, px]
 
             # Apply mask head to mask features with relative coordinates
+            # NOTE: TensorRT7 does not support dynamic filter for conv2d. Use matmul instead.
             x = mask_logits[no_obj:no_obj+1,:,:,:] # Tensor[1, num_filters+2, height, width]
-            x = F.conv2d(x, weights1, biases1) # Tensor[1, num_filters, height, width]
+
+            x = x.permute(2, 3, 0, 1) # Tensor[height, width, 1, num_filters+2]
+            weights1 = weights1.permute(2, 3, 1, 0) # Tensor[1, 1, num_filters+2, num_filters]
+            x = torch.matmul(x, weights1) # Tensor[height, width, 1, num_filters]
+            x = x + biases1[None, None, None, :]
             x = F.relu(x)
-            x = F.conv2d(x, weights2, biases2) # Tensor[1, num_filters, height, width]
+
+            weights2 = weights2.permute(2, 3, 1, 0) # Tensor[1, 1, num_filters, num_filters]
+            x = torch.matmul(x, weights2) # Tensor[height, width, 1, num_filters]
+            x = x + biases2[None, None, None, :]
             x = F.relu(x)
-            x = F.conv2d(x, weights3, biases3) # Tensor[1, 1, height, width]
+
+            weights3 = weights3.permute(2, 3, 1, 0) # Tensor[1, 1, num_filters, 1]
+            x = torch.matmul(x, weights3) # Tensor[height, width, 1, 1]
+            x = x + biases3[None, None, None, :]
+
+            x = x.permute(2, 3, 0, 1)
             mask = F.sigmoid(x)
+
             masks.append(mask)
         masks = torch.stack(masks, dim=0)
         return masks
