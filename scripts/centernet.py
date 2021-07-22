@@ -349,19 +349,24 @@ class CenterNet(nn.Module):
             gt_masks = torch.stack([torch.as_tensor(obj['segmentation'], dtype=torch.float32, device=device) for obj in targets[i]], dim=0) # Tensor[num_objects, image_height, image_width]
 
             # Downsample GT masks
-            gt_masks = F.interpolate(gt_masks[None,...], size=(feature_height, feature_width)) # Tensor[1, num_objects, feature_height, feature_width]
-            gt_masks = gt_masks[0,...] # Tensor[num_objects, feature_height, feature_width]
+            gt_masks_resized = F.interpolate(gt_masks[None,...], size=(feature_height, feature_width)) # Tensor[1, num_objects, feature_height, feature_width]
+            gt_masks_resized = gt_masks_resized[0,...] # Tensor[num_objects, feature_height, feature_width]
 
             # Generate GT heatmap
-            gt_heatmap, gt_centroids = generate_heatmap(gt_labels, gt_masks, num_classes) # Tensor[num_objects, feature_height, feature_width], Tensor[num_objects, (x, y)]
+            gt_heatmap, gt_centroids = generate_heatmap(gt_labels, gt_masks_resized, num_classes) # Tensor[num_objects, feature_height, feature_width], Tensor[num_objects, (x, y)]
 
             # Generate mask for each object
-            masks = self.generate_mask(ctr_logits[i], mask_logits[i], gt_centroids)
+            masks = self.generate_mask(ctr_logits[i], mask_logits[i], gt_centroids) # Tensor[num_objects, feature_height, feature_width]
 
             # Calculate loss
             num_objects, _, _ = gt_masks.shape
+
             heatmap_loss = heatmap_focal_loss(cls_logits[i].sigmoid(), gt_heatmap, alpha=2, gamma=4) / num_objects
-            mask_loss = dice_loss(masks, gt_masks) / num_objects
+
+            masks = F.interpolate(masks[None,...], scale_factor=4, mode='bilinear') # Tensor[num_objects, image_height/2, image_width/2]
+            gt_masks_resized = F.interpolate(gt_masks[None,...], scale_factor=0.5, mode='bilinear') # Tensor[num_objects, image_height/2, image_width/2]
+            mask_loss = dice_loss(masks, gt_masks_resized) / num_objects
+
             loss = heatmap_loss + 1.0 * mask_loss
             losses.append(loss)
 
