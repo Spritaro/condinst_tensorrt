@@ -68,8 +68,9 @@ def concat_images_and_heatmaps(images, cls_logits, ctr_logits, mask_logits, targ
     return images_and_heatmaps
 
 class LitCenterNet(pl.LightningModule):
-    def __init__(self, mode, num_classes, topk=100):
+    def __init__(self, mode, num_classes, topk=100, mask_loss_factor=1.0):
         super().__init__()
+        self.mask_loss_factor = mask_loss_factor
         self.centernet = CenterNet(mode, num_classes, topk)
 
         # TensorBoard
@@ -89,11 +90,14 @@ class LitCenterNet(pl.LightningModule):
         images = torch.stack(images, dim=0)
 
         cls_logits, ctr_logits, mask_logits = self(images)
-        loss = self.centernet.loss(cls_logits, ctr_logits, mask_logits, targets)
+        heatmap_loss, mask_loss = self.centernet.loss(cls_logits, ctr_logits, mask_logits, targets)
+        loss = heatmap_loss + self.mask_loss_factor * mask_loss
 
         # TensorBoard
         if batch_idx % self.trainer.accumulate_grad_batches == 0:
             # Display loss
+            self.writer.add_scalar("heatmap_loss", heatmap_loss, self.global_step)
+            self.writer.add_scalar("mask_loss", mask_loss, self.global_step)
             self.writer.add_scalar("loss", loss, self.global_step)
 
             # Display heatmaps
@@ -111,9 +115,12 @@ class LitCenterNet(pl.LightningModule):
         images = torch.stack(images, dim=0)
 
         cls_logits, ctr_logits, mask_logits = self(images)
-        loss = self.centernet.loss(cls_logits, ctr_logits, mask_logits, targets)
+        heatmap_loss, mask_loss = self.centernet.loss(cls_logits, ctr_logits, mask_logits, targets)
+        loss = heatmap_loss + self.mask_loss_factor * mask_loss
 
         # TensorBoard
+        self.writer.add_scalar("val_heatmap_loss", heatmap_loss, self.global_step)
+        self.writer.add_scalar("val_mask_loss", mask_loss, self.global_step)
         self.writer.add_scalar("val_loss", loss, self.global_step)
 
         return loss
