@@ -216,7 +216,7 @@ class CenterNet(nn.Module):
         )
 
         # Initialize weight and bias for class head
-        nn.init.xavier_uniform(self.cls_head[-1].weight)
+        nn.init.xavier_uniform_(self.cls_head[-1].weight)
         prior_prob = 0.01
         bias = -math.log((1 - prior_prob) / prior_prob)
         nn.init.constant_(self.cls_head[-1].bias, bias)
@@ -315,7 +315,7 @@ class CenterNet(nn.Module):
             x = x + biases3[None, None, None, :]
 
             x = x.permute(2, 3, 0, 1)
-            mask = F.sigmoid(x)
+            mask = torch.sigmoid(x)
 
             masks.append(mask)
         masks = torch.stack(masks, dim=0)
