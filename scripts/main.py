@@ -90,7 +90,7 @@ if __name__ == '__main__':
 
     # Load model for inference
     filepath = 'centernet.pt'
-    model = LitCenterNet(mode='inference', num_classes=81)
+    model = LitCenterNet(mode='inference', num_classes=81, topk=40)
     model.load_state_dict(torch.load(filepath)) # Load model
 
     # Export to ONNX

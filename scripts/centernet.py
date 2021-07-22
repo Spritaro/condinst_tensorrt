@@ -138,7 +138,7 @@ def dice_loss(inputs, targets, smooth=1):
     return 1 - dice
 
 class CenterNet(nn.Module):
-    def __init__(self, mode, num_classes, topk=40):
+    def __init__(self, mode, num_classes, topk=100):
         super().__init__()
         assert mode in ['training', 'inference']
         self.mode = mode
