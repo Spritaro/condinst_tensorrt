@@ -314,11 +314,12 @@ class CenterNet(nn.Module):
             x = torch.matmul(x, weights3) # Tensor[height, width, 1, 1]
             x = x + biases3[None, None, None, :]
 
-            x = x.permute(2, 3, 0, 1)
+            x = x.permute(2, 3, 0, 1) # Tensor[1, 1, height, width]
+            x = x.view(1, height, width) # Tensor[1, height, width]
             mask = torch.sigmoid(x)
 
             masks.append(mask)
-        masks = torch.stack(masks, dim=0)
+        masks = torch.cat(masks, dim=0)
         return masks
 
     def loss(self, cls_logits, ctr_logits, mask_logits, targets):
