@@ -28,6 +28,10 @@ def concat_images_and_heatmaps(images, cls_logits, ctr_logits, mask_logits, targ
 
     # Create colored heatmaps from class predictions
     heatmaps = torch.ones(size=(num_batch, 3, feature_height, feature_width), device=device)
+    cls_logits_max, _ = torch.max(cls_logits, dim=1)
+    heatmaps[:,1,:,:] -= cls_logits_max.sigmoid() # subtract green
+    heatmaps[:,2,:,:] -= cls_logits_max.sigmoid() # subtract blue
+
     maskmaps = torch.zeros_like(heatmaps)
 
     for i in range(num_batch):
