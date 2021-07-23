@@ -330,18 +330,21 @@ class CenterNet(nn.Module):
             mask_logits: Tensor[num_batch, num_filters, feature_height, feature_width]
             targets: List[List[Dict{'category_id': int, 'segmentations': Tensor[image_height, image_width]}]]
         Returns:
-            loss: Tensor[num_batch]
+            heatmap_loss: Tensor[]
+            mask_loss: Tensor[]
         """
         num_batch, num_classes, feature_height, feature_width = cls_logits.shape
         device = cls_logits.device
 
         # Assign each GT mask to one point in feature map, then calculate loss
-        losses = []
+        heatmap_losses = []
+        mask_losses = []
         for i in range(num_batch):
 
             # Skip if no object in targets
             if len(targets[i]) == 0:
-                losses.append(torch.tensor(0, dtype=torch.float32, device=device))
+                heatmap_losses.append(torch.tensor(0, dtype=torch.float32, device=device))
+                mask_losses.append(torch.tensor(0, dtype=torch.float32, device=device))
                 continue
 
             # Convert list of dicts to Tensors
@@ -367,8 +370,10 @@ class CenterNet(nn.Module):
             gt_masks_resized = F.interpolate(gt_masks[None,...], scale_factor=0.5, mode='bilinear') # Tensor[num_objects, image_height/2, image_width/2]
             mask_loss = dice_loss(masks, gt_masks_resized) / num_objects
 
-            loss = heatmap_loss + 1.0 * mask_loss
-            losses.append(loss)
+            heatmap_losses.append(heatmap_loss)
+            mask_losses.append(mask_loss)
 
-        return torch.stack(losses, dim=0).mean()
+        heatmap_loss =torch.stack(heatmap_losses, dim=0).mean()
+        mask_loss = torch.stack(mask_losses).mean()
+        return heatmap_loss, mask_loss
 
