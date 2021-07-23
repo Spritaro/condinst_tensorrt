@@ -108,7 +108,12 @@ if __name__ == '__main__':
         print("probabilities {}".format(probs))
 
         masks = masks.transpose(1, 2, 0)
-        masks = cv2.resize(masks, dsize=(640, 480), interpolation=cv2.INTER_NEAREST)
+        masks = cv2.resize(masks, dsize=(640, 480), interpolation=cv2.INTER_LINEAR)
+        masks = (masks > 0.5).astype(np.float32)
+
+        # Add channel dimension if removed by cv2.resize()
+        if len(masks.shape) == 2:
+            masks = masks[...,None]
 
         # Visualize masks
         mask_visualize = np.zeros((480, 640, 3), dtype=np.float32)
