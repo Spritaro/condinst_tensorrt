@@ -238,9 +238,9 @@ class CenterNet(nn.Module):
 
         x = self.upsample(x) # -> 1/16 -> 1/8
 
-        cls_logits = self.cls_head(x) # [num_batch, num_classes, h, w]
-        ctr_logits = self.ctr_head(x) # [num_batch, num_channels, h, w]
-        mask_logits = self.mask_head(x) # [num_batch, num_filters, h, w]
+        cls_logits = self.cls_head(x) # [num_batch, num_classes, feature_height, feature_width]
+        ctr_logits = self.ctr_head(x) # [num_batch, num_channels, feature_height, feature_width]
+        mask_logits = self.mask_head(x) # [num_batch, num_filters, mask_height, mask_width]
 
         if self.mode == 'training':
             return cls_logits, ctr_logits, mask_logits
@@ -257,31 +257,32 @@ class CenterNet(nn.Module):
     def generate_mask(self, ctr_logits, mask_logits, centroids):
         """
         Params:
-            ctr_logits: Tensor[num_channels, height, width]
-            mask_logits: Tensor[num_filters, height, width]
+            ctr_logits: Tensor[num_channels, feature_height, feature_width]
+            mask_logits: Tensor[num_filters, mask_height, mask_width]
             centroids: Tensor[num_objects, (x, y)]
         Returns:
-            masks: Tensor[num_objects, height, width]
+            masks: Tensor[num_objects, mask_height, mask_width]
         """
-        _, height, width = ctr_logits.shape
+        _, feature_height, feature_width = ctr_logits.shape
+        _, mask_height, mask_width = mask_logits.shape
         num_objects, _ = centroids.shape
         device = ctr_logits.device
 
         # Absolute coordinates
         # NOTE: TensorRT7 does not support float range operation. Use cast instead.
-        location_x = torch.arange(0, width, 1, dtype=torch.int32, device=device).float() # Tensor[width]
-        location_y = torch.arange(0, height, 1, dtype=torch.int32, device=device).float() # Tensor[height]
-        location_y, location_x = torch.meshgrid(location_y, location_x) # Tensor[height, width], Tensor[height, width]
-        location_xs = location_x[None,:,:].repeat(num_objects, 1, 1) # Tensor[num_objects, height, width]
-        location_ys = location_y[None,:,:].repeat(num_objects, 1, 1) # Tensor[num_objects, height, width]
+        location_x = torch.arange(0, mask_width, 1, dtype=torch.int32, device=device).float() # Tensor[mask_width]
+        location_y = torch.arange(0, mask_height, 1, dtype=torch.int32, device=device).float() # Tensor[mask_height]
+        location_y, location_x = torch.meshgrid(location_y, location_x) # Tensor[mask_height, mask_width], Tensor[mask_height, mask_width]
+        location_xs = location_x[None,:,:].repeat(num_objects, 1, 1) # Tensor[num_objects, mask_height, mask_width]
+        location_ys = location_y[None,:,:].repeat(num_objects, 1, 1) # Tensor[num_objects, mask_height, mask_width]
 
         # Relative coordinates
-        location_xs -= centroids[:,0].view(-1,1,1) # Tensor[num_objects, height, width]
-        location_ys -= centroids[:,1].view(-1,1,1) # Tensor[num_objects, height, width]
+        location_xs -= centroids[:,0].view(-1,1,1) # Tensor[num_objects, mask_height, mask_width]
+        location_ys -= centroids[:,1].view(-1,1,1) # Tensor[num_objects, mask_height, mask_width]
 
         # Add relative coordinates to mask features
-        mask_logits = mask_logits[None,:,:,:].repeat(num_objects,1,1,1) # Tensor[num_objects, num_filters, height, width]
-        mask_logits = torch.cat([mask_logits, location_xs[:,None,:,:], location_ys[:,None,:,:]], dim=1) # Tensor[num_objects, num_filters+2, height, width]
+        mask_logits = mask_logits[None,:,:,:].repeat(num_objects,1,1,1) # Tensor[num_objects, num_filters, mask_height, mask_width]
+        mask_logits = torch.cat([mask_logits, location_xs[:,None,:,:], location_ys[:,None,:,:]], dim=1) # Tensor[num_objects, num_filters+2, mask_height, mask_width]
 
         # Create instance-aware mask head
         masks = []
@@ -297,25 +298,25 @@ class CenterNet(nn.Module):
 
             # Apply mask head to mask features with relative coordinates
             # NOTE: TensorRT7 does not support dynamic filter for conv2d. Use matmul instead.
-            x = mask_logits[no_obj:no_obj+1,:,:,:] # Tensor[1, num_filters+2, height, width]
+            x = mask_logits[no_obj:no_obj+1,:,:,:] # Tensor[1, num_filters+2, mask_height, mask_width]
 
-            x = x.permute(2, 3, 0, 1) # Tensor[height, width, 1, num_filters+2]
+            x = x.permute(2, 3, 0, 1) # Tensor[mask_height, mask_width, 1, num_filters+2]
             weights1 = weights1.permute(2, 3, 1, 0) # Tensor[1, 1, num_filters+2, num_filters]
-            x = torch.matmul(x, weights1) # Tensor[height, width, 1, num_filters]
+            x = torch.matmul(x, weights1) # Tensor[mask_height, mask_width, 1, num_filters]
             x = x + biases1[None, None, None, :]
             x = F.relu(x)
 
             weights2 = weights2.permute(2, 3, 1, 0) # Tensor[1, 1, num_filters, num_filters]
-            x = torch.matmul(x, weights2) # Tensor[height, width, 1, num_filters]
+            x = torch.matmul(x, weights2) # Tensor[mask_height, mask_width, 1, num_filters]
             x = x + biases2[None, None, None, :]
             x = F.relu(x)
 
             weights3 = weights3.permute(2, 3, 1, 0) # Tensor[1, 1, num_filters, 1]
-            x = torch.matmul(x, weights3) # Tensor[height, width, 1, 1]
+            x = torch.matmul(x, weights3) # Tensor[mask_height, mask_width, 1, 1]
             x = x + biases3[None, None, None, :]
 
-            x = x.permute(2, 3, 0, 1) # Tensor[1, 1, height, width]
-            x = x.view(1, height, width) # Tensor[1, height, width]
+            x = x.permute(2, 3, 0, 1) # Tensor[1, 1, mask_height, mask_width]
+            x = x.view(1, mask_height, mask_width) # Tensor[1, mask_height, mask_width]
             mask = torch.sigmoid(x)
 
             masks.append(mask)
@@ -327,13 +328,14 @@ class CenterNet(nn.Module):
         Params:
             cls_logits: Tensor[num_batch, num_classes, feature_height, feature_width]
             ctr_logits: Tensor[num_batch, num_channels, feature_height, feature_width]
-            mask_logits: Tensor[num_batch, num_filters, feature_height, feature_width]
+            mask_logits: Tensor[num_batch, num_filters, mask_height, mask_width]
             targets: List[List[Dict{'category_id': int, 'segmentations': Tensor[image_height, image_width]}]]
         Returns:
             heatmap_loss: Tensor[]
             mask_loss: Tensor[]
         """
         num_batch, num_classes, feature_height, feature_width = cls_logits.shape
+        num_batch, num_filters, mask_height, mask_width = mask_logits.shape
         device = cls_logits.device
 
         # Assign each GT mask to one point in feature map, then calculate loss
@@ -352,23 +354,22 @@ class CenterNet(nn.Module):
             gt_masks = torch.stack([torch.as_tensor(obj['segmentation'], dtype=torch.float32, device=device) for obj in targets[i]], dim=0) # Tensor[num_objects, image_height, image_width]
 
             # Downsample GT masks
-            gt_masks_resized = F.interpolate(gt_masks[None,...], size=(feature_height, feature_width)) # Tensor[1, num_objects, feature_height, feature_width]
-            gt_masks_resized = gt_masks_resized[0,...] # Tensor[num_objects, feature_height, feature_width]
+            gt_masks_size_feature = F.interpolate(gt_masks[None,...], size=(feature_height, feature_width)) # Tensor[1, num_objects, feature_height, feature_width]
+            gt_masks_size_feature = gt_masks_size_feature[0,...] # Tensor[num_objects, feature_height, feature_width]
 
             # Generate GT heatmap
-            gt_heatmap, gt_centroids = generate_heatmap(gt_labels, gt_masks_resized, num_classes) # Tensor[num_objects, feature_height, feature_width], Tensor[num_objects, (x, y)]
+            gt_heatmap, gt_centroids = generate_heatmap(gt_labels, gt_masks_size_feature, num_classes) # Tensor[num_objects, feature_height, feature_width], Tensor[num_objects, (x, y)]
 
             # Generate mask for each object
-            masks = self.generate_mask(ctr_logits[i], mask_logits[i], gt_centroids) # Tensor[num_objects, feature_height, feature_width]
+            masks = self.generate_mask(ctr_logits[i], mask_logits[i], gt_centroids) # Tensor[num_objects, mask_height, mask_width]
 
             # Calculate loss
             num_objects, _, _ = gt_masks.shape
 
             heatmap_loss = heatmap_focal_loss(cls_logits[i].sigmoid(), gt_heatmap, alpha=2, gamma=4) / num_objects
 
-            masks = F.interpolate(masks[None,...], scale_factor=4, mode='bilinear') # Tensor[num_objects, image_height/2, image_width/2]
-            gt_masks_resized = F.interpolate(gt_masks[None,...], scale_factor=0.5, mode='bilinear') # Tensor[num_objects, image_height/2, image_width/2]
-            mask_loss = dice_loss(masks, gt_masks_resized) / num_objects
+            gt_masks_size_mask = F.interpolate(gt_masks[None,...], size=(mask_height, mask_width)) # Tensor[1, num_objects, mask_height, mask_width]
+            mask_loss = dice_loss(masks, gt_masks_size_mask) / num_objects
 
             heatmap_losses.append(heatmap_loss)
             mask_losses.append(mask_loss)
