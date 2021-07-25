@@ -137,6 +137,28 @@ def dice_loss(inputs, targets, smooth=1):
 
     return 1 - dice
 
+class AggNode(nn.Module):
+    def __init__(self, parent_channels, child_channels):
+        super().__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels=parent_channels, out_channels=child_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=child_channels),
+            nn.ReLU(),
+        )
+        # self.upsample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
+        self.upsample = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels=child_channels, out_channels=child_channels, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(num_features=child_channels),
+            nn.ReLU(),
+        )
+
+    def forward(self, parent, child):
+        parent = self.conv(parent)
+        child = self.upsample(child)
+        x = parent + child
+        return x
+
 class CenterNet(nn.Module):
     def __init__(self, mode, num_classes, topk=100):
         super().__init__()
@@ -154,30 +176,26 @@ class CenterNet(nn.Module):
         num_channels = self.conv3_b
 
         # self.backbone = resnet_fpn_backbone('resnet50', pretrained=True, trainable_layers=5)
-        self.backbone = torchvision.models.resnet50(pretrained=True)
+        # self.backbone = torchvision.models.resnet50(pretrained=True)
+        self.backbone = torchvision.models.resnet34(pretrained=True)
+        # self.backbone = torchvision.models.resnet18(pretrained=True)
 
-        self.upsample = nn.Sequential(
-            nn.Conv2d(in_channels=2048, out_channels=256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=256),
-            nn.ReLU(),
-            nn.Upsample(scale_factor=2, mode='bilinear'),
+        num_channels_c2 = 64
+        num_channels_c3 = 128
+        num_channels_c4 = 256
+        num_channels_c5 = 512
 
-            nn.Conv2d(in_channels=256, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=128),
-            nn.ReLU(),
-            nn.Upsample(scale_factor=2, mode='bilinear'),
+        self.agg_block_c2_1 = AggNode(num_channels_c2, num_channels_c3)
+        self.agg_block_c2_2 = AggNode(num_channels_c3, num_channels_c4)
+        self.agg_block_c2_3 = AggNode(num_channels_c4, num_channels_c5)
 
-            # nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, padding=1),
-            # nn.BatchNorm2d(num_features=64),
-            # nn.ReLU(),
-            # nn.Upsample(scale_factor=2, mode='bilinear'),
-        )
+        self.agg_block_c3_1 = AggNode(num_channels_c3, num_channels_c4)
+        self.agg_block_c3_2 = AggNode(num_channels_c4, num_channels_c5)
+
+        self.agg_block_c4_1 = AggNode(num_channels_c4, num_channels_c5)
 
         self.cls_head = nn.Sequential(
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=128),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=512, out_channels=128, kernel_size=3, padding=1),
             nn.BatchNorm2d(num_features=128),
             nn.ReLU(),
             nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
@@ -185,28 +203,17 @@ class CenterNet(nn.Module):
             nn.ReLU(),
             nn.Conv2d(in_channels=128, out_channels=num_classes, kernel_size=1, padding=0)
         )
-
         self.ctr_head = nn.Sequential(
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=128),
+            nn.Conv2d(in_channels=512, out_channels=256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=256),
             nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=128),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=256),
             nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=128),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=num_channels, kernel_size=1, padding=0)
+            nn.Conv2d(in_channels=256, out_channels=num_channels, kernel_size=1, padding=0)
         )
-
         self.mask_head = nn.Sequential(
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=128),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=128),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=512, out_channels=128, kernel_size=3, padding=1),
             nn.BatchNorm2d(num_features=128),
             nn.ReLU(),
             nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
@@ -221,6 +228,34 @@ class CenterNet(nn.Module):
         bias = -math.log((1 - prior_prob) / prior_prob)
         nn.init.constant_(self.cls_head[-1].bias, bias)
 
+        # def initialize_weights(m):
+        #     if isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
+        #         nn.init.xavier_uniform_(m.weight)
+        #         if m.bias is not None:
+        #             nn.init.constant_(m.bias, 0)
+
+        def initialize_convtranspose2d_as_4x4_bilinear(m):
+            if isinstance(m, nn.ConvTranspose2d):
+                assert(m.in_channels == m.out_channels)
+                bilinear_kernel = torch.as_tensor([
+                    [0.0625, 0.1875, 0.1875, 0.0625],
+                    [0.1875, 0.5625, 0.5625, 0.1875],
+                    [0.1875, 0.5625, 0.5625, 0.1875],
+                    [0.0625, 0.1875, 0.1875, 0.0625]
+                ], dtype=torch.float32)
+                weight = torch.zeros(size=(m.in_channels, m.out_channels, 4, 4), dtype=torch.float32)
+                for i in range(m.in_channels):
+                    weight[i,i,:,:] = bilinear_kernel
+                m.weight.data = nn.Parameter(weight)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+        self.agg_block_c2_1.apply(initialize_convtranspose2d_as_4x4_bilinear)
+        self.agg_block_c2_2.apply(initialize_convtranspose2d_as_4x4_bilinear)
+        self.agg_block_c2_3.apply(initialize_convtranspose2d_as_4x4_bilinear)
+        self.agg_block_c3_1.apply(initialize_convtranspose2d_as_4x4_bilinear)
+        self.agg_block_c3_2.apply(initialize_convtranspose2d_as_4x4_bilinear)
+        self.agg_block_c4_1.apply(initialize_convtranspose2d_as_4x4_bilinear)
+
     def forward(self, images):
         images = images.to(dtype=torch.float32)
 
@@ -231,12 +266,21 @@ class CenterNet(nn.Module):
         x = self.backbone.bn1(x)
         x = self.backbone.relu(x)
         x = self.backbone.maxpool(x)
-        x = self.backbone.layer1(x) # 1/4
-        x = self.backbone.layer2(x) # 1/8
-        x = self.backbone.layer3(x) # 1/16
-        x = self.backbone.layer4(x) # 1/32
+        c2 = self.backbone.layer1(x) # 1/4
+        c3 = self.backbone.layer2(c2) # 1/8
+        c4 = self.backbone.layer3(c3) # 1/16
+        c5 = self.backbone.layer4(c4) # 1/32
 
-        x = self.upsample(x) # -> 1/16 -> 1/8
+        # x = self.upsample(x) # -> 1/16 -> 1/8
+
+        c2_1 = self.agg_block_c2_1(c2, c3)
+        c3_1 = self.agg_block_c3_1(c3, c4)
+        c4_1 = self.agg_block_c4_1(c4, c5)
+
+        c2_2 = self.agg_block_c2_2(c2_1, c3_1)
+        c3_2 = self.agg_block_c3_2(c3_1, c4_1)
+
+        x = self.agg_block_c2_3(c2_2, c3_2)
 
         cls_logits = self.cls_head(x) # [num_batch, num_classes, feature_height, feature_width]
         ctr_logits = self.ctr_head(x) # [num_batch, num_channels, feature_height, feature_width]
