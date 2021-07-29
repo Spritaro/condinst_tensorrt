@@ -277,11 +277,11 @@ class CenterNet(nn.Module):
         location_ys = location_y[None,:,:].repeat(num_objects, 1, 1) # Tensor[num_objects, mask_height, mask_width]
 
         # Relative coordinates
-        location_xs -= centroids[:,0].view(-1,1,1) # Tensor[num_objects, mask_height, mask_width]
-        location_ys -= centroids[:,1].view(-1,1,1) # Tensor[num_objects, mask_height, mask_width]
+        location_xs -= centroids[:, 0].view(-1, 1, 1) * (mask_width // feature_width) # Tensor[num_objects, mask_height, mask_width]
+        location_ys -= centroids[:, 1].view(-1, 1, 1) * (mask_height // feature_height) # Tensor[num_objects, mask_height, mask_width]
 
         # Add relative coordinates to mask features
-        mask_logits = mask_logits[None,:,:,:].repeat(num_objects,1,1,1) # Tensor[num_objects, num_filters, mask_height, mask_width]
+        mask_logits = mask_logits[None,:,:,:].expand(num_objects, self.num_filters, mask_height, mask_width) # Tensor[num_objects, num_filters, mask_height, mask_width]
         mask_logits = torch.cat([mask_logits, location_xs[:,None,:,:], location_ys[:,None,:,:]], dim=1) # Tensor[num_objects, num_filters+2, mask_height, mask_width]
 
         # Create instance-aware mask head
