@@ -140,23 +140,29 @@ def dice_loss(inputs, targets, smooth=1):
 class AggNode(nn.Module):
     def __init__(self, parent_channels, child_channels):
         super().__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(in_channels=parent_channels, out_channels=child_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=child_channels),
+        out_channels = parent_channels
+        self.proj = nn.Sequential(
+            nn.Conv2d(
+                in_channels=child_channels, out_channels=out_channels, kernel_size=1, padding=0, bias=False),
+            nn.BatchNorm2d(num_features=out_channels),
             nn.ReLU(),
         )
-        # self.upsample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
-        self.upsample = nn.Sequential(
+        self.up = nn.Sequential(
             nn.ConvTranspose2d(
-                in_channels=child_channels, out_channels=child_channels, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(num_features=child_channels),
+                in_channels=out_channels, out_channels=out_channels, kernel_size=4, stride=2, padding=1, bias=False),
+        )
+        self.node = nn.Sequential(
+            nn.Conv2d(
+                in_channels=parent_channels+out_channels, out_channels=out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=out_channels),
             nn.ReLU(),
         )
 
     def forward(self, parent, child):
-        parent = self.conv(parent)
-        child = self.upsample(child)
-        x = parent + child
+        x = self.proj(child)
+        x = self.up(x)
+        x = torch.cat([x, parent], dim=1)
+        x = self.node(x)
         return x
 
 class CenterNet(nn.Module):
@@ -186,40 +192,40 @@ class CenterNet(nn.Module):
         num_channels_c5 = 512
 
         self.agg_block_c2_1 = AggNode(num_channels_c2, num_channels_c3)
-        self.agg_block_c2_2 = AggNode(num_channels_c3, num_channels_c4)
-        self.agg_block_c2_3 = AggNode(num_channels_c4, num_channels_c5)
-
         self.agg_block_c3_1 = AggNode(num_channels_c3, num_channels_c4)
-        self.agg_block_c3_2 = AggNode(num_channels_c4, num_channels_c5)
-
         self.agg_block_c4_1 = AggNode(num_channels_c4, num_channels_c5)
 
+        self.agg_block_c2_2 = AggNode(num_channels_c2, num_channels_c3)
+        self.agg_block_c3_2 = AggNode(num_channels_c3, num_channels_c4)
+
+        self.agg_block_c2_3 = AggNode(num_channels_c2, num_channels_c3)
+
         self.cls_head = nn.Sequential(
-            nn.Conv2d(in_channels=512, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=128),
+            nn.Conv2d(in_channels=num_channels_c2, out_channels=64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=64),
             nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=128),
+            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=64),
             nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=num_classes, kernel_size=1, padding=0)
+            nn.Conv2d(in_channels=64, out_channels=num_classes, kernel_size=1, padding=0)
         )
         self.ctr_head = nn.Sequential(
-            nn.Conv2d(in_channels=512, out_channels=256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=256),
+            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=64),
             nn.ReLU(),
-            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=256),
+            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=64),
             nn.ReLU(),
-            nn.Conv2d(in_channels=256, out_channels=num_channels, kernel_size=1, padding=0)
+            nn.Conv2d(in_channels=64, out_channels=num_channels, kernel_size=1, padding=0)
         )
         self.mask_head = nn.Sequential(
-            nn.Conv2d(in_channels=512, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=128),
+            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=64),
             nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=128),
+            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=64),
             nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=self.num_filters, kernel_size=1, padding=0)
+            nn.Conv2d(in_channels=64, out_channels=self.num_filters, kernel_size=1, padding=0)
         )
 
         # Initialize weight and bias for class head
