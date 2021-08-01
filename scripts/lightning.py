@@ -3,8 +3,6 @@ import torch.nn.functional as F
 import torchvision
 import pytorch_lightning as pl
 
-from torch.utils.tensorboard import SummaryWriter
-
 from centernet import CenterNet, generate_heatmap, get_heatmap_peaks
 from coco_category_id import category_id_to_label
 
@@ -80,8 +78,6 @@ class LitCenterNet(pl.LightningModule):
 
         # TensorBoard
         self.mode = mode
-        if self.mode == 'training':
-            self.writer = SummaryWriter()
 
     def forward(self, images):
         outputs = self.centernet(images)
@@ -101,14 +97,14 @@ class LitCenterNet(pl.LightningModule):
         # TensorBoard
         if batch_idx % self.trainer.accumulate_grad_batches == 0:
             # Display loss
-            self.writer.add_scalar("heatmap_loss", heatmap_loss, self.global_step)
-            self.writer.add_scalar("mask_loss", mask_loss, self.global_step)
-            self.writer.add_scalar("loss", loss, self.global_step)
-
+            tensorboard = self.logger.experiment
+            tensorboard.add_scalar("heatmap_loss", heatmap_loss, self.global_step)
+            tensorboard.add_scalar("mask_loss", mask_loss, self.global_step)
+            tensorboard.add_scalar("loss", loss, self.global_step)
             # Display heatmaps
             images_and_heatmaps = concat_images_and_heatmaps(images, cls_logits, ctr_logits, mask_logits, targets, self.centernet)
             img_grid = torchvision.utils.make_grid(images_and_heatmaps, nrow=images.shape[0])
-            self.writer.add_image('heatmap_images', img_grid, global_step=self.global_step)
+            tensorboard.add_image('images', img_grid, global_step=self.global_step)
 
         return loss
 
@@ -124,9 +120,10 @@ class LitCenterNet(pl.LightningModule):
         loss = heatmap_loss + self.mask_loss_factor * mask_loss
 
         # TensorBoard
-        self.writer.add_scalar("val_heatmap_loss", heatmap_loss, self.global_step)
-        self.writer.add_scalar("val_mask_loss", mask_loss, self.global_step)
-        self.writer.add_scalar("val_loss", loss, self.global_step)
+        tensorboard = self.logger.experiment
+        tensorboard.add_scalar("val_heatmap_loss", heatmap_loss, self.global_step)
+        tensorboard.add_scalar("val_mask_loss", mask_loss, self.global_step)
+        tensorboard.add_scalar("val_loss", loss, self.global_step)
 
         return loss
 

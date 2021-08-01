@@ -7,11 +7,11 @@ from albumentations.pytorch import ToTensorV2
 
 import torch
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 
 import torchvision
 
 import pytorch_lightning as pl
+from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 from lightning import LitCenterNet
@@ -71,6 +71,9 @@ if __name__ == '__main__':
     # filepath = 'centernet.pt'
     # model.load_state_dict(torch.load(filepath)) # Load model
 
+    # Logger
+    tb_logger = pl_loggers.TensorBoardLogger(save_dir="./runs", default_hp_metric=False)
+
     # Train model
     trainer = pl.Trainer(
         # max_epochs=1,
@@ -80,7 +83,8 @@ if __name__ == '__main__':
         accumulate_grad_batches=16,
         callbacks=[checkpoint_callback],
         # resume_from_checkpoint='checkpoints/centernet-condinst-epoch=00-val_loss=0.00.ckpt'
-        precision=16
+        precision=16,
+        logger=tb_logger
     )
     trainer.fit(model, coco_train, coco_val)
     # trainer.fit(model, coco_train)
