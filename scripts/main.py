@@ -39,6 +39,7 @@ parser.add_argument('--mixed_precision', type=bool, default=True, help="allow FP
 parser.add_argument('--resume_from_checkpoint', type=str, default=None, help="path to checkpoint file (optional)")
 parser.add_argument('--max_epochs', type=int, default=10, help="number of epochs (default 10")
 parser.add_argument('--gpus', type=int, default=1, help="number of GPUs to train (0 for CPU, -1 for all GPUs) (default 1)")
+parser.add_argument('--learning_rate', type=float, default=1e-4, help="learning rate (default 1e-4)")
 
 # Logging options
 parser.add_argument('--tensorboard_log_dir', type=str, default='../runs', help="path to TensorBoard log dir (default '../runs')")
@@ -96,7 +97,7 @@ if __name__ == '__main__':
         )
 
         # Create model for training
-        model = LitCenterNet(mode='training', num_classes=args.num_classes)
+        model = LitCenterNet(mode='training', num_classes=args.num_classes, learning_rate=args.learning_rate)
 
         # Load pretrained weights
         if args.pretrained_model:

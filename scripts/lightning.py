@@ -71,8 +71,9 @@ def concat_images_and_heatmaps(images, cls_logits, ctr_logits, mask_logits, targ
     return images_and_heatmaps
 
 class LitCenterNet(pl.LightningModule):
-    def __init__(self, mode, num_classes, topk=100, mask_loss_factor=1.0):
+    def __init__(self, mode, num_classes, learning_rate=1e-4, topk=100, mask_loss_factor=1.0):
         super().__init__()
+        self.learning_rate = learning_rate
         self.mask_loss_factor = mask_loss_factor
         self.centernet = CenterNet(mode, num_classes, topk)
 
@@ -129,7 +130,7 @@ class LitCenterNet(pl.LightningModule):
 
     def configure_optimizers(self):
         # optimizer = torch.optim.Adam(self.parameters(), lr=5e-4)
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-4, eps=1e-6)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, eps=1e-3)
         return optimizer
 
     def on_train_end(self):
