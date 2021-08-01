@@ -117,8 +117,3 @@ class LitCenterNet(pl.LightningModule):
         # optimizer = torch.optim.Adam(self.parameters(), lr=5e-4)
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, eps=1e-3)
         return optimizer
-
-    def on_train_end(self):
-        # TensorBoard
-        if self.mode == 'training':
-            self.writer.close()
