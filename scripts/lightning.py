@@ -5,7 +5,7 @@ import pytorch_lightning as pl
 
 from centernet import CenterNet, generate_heatmap, get_heatmap_peaks
 
-def concat_images_and_heatmaps(images, cls_logits, ctr_logits, mask_logits, targets, model, label=1):
+def concat_images_and_heatmaps(images, cls_logits, ctr_logits, mask_logits, targets, model):
     """
     Params:
         images: Tensor[num_batch, 3, H, W]
@@ -39,13 +39,14 @@ def concat_images_and_heatmaps(images, cls_logits, ctr_logits, mask_logits, targ
 
         # Draw peak
         topk = 10
-        labels, preds, points = get_heatmap_peaks(cls_logits[i:i+1], topk)
-        for no_obj in range(topk):
+        labels, preds, points = get_heatmap_peaks(cls_logits[i:i+1], topk=topk)
+        num_objects, = preds[preds > 0.1].shape
+        for no_obj in range(num_objects):
             heatmaps[i,0,points[0,no_obj,1],points[0,no_obj,0]] = 0
 
         # Draw mask
         masks = model.generate_mask(ctr_logits[i], mask_logits[i], points[0])
-        for no_obj in range(topk):
+        for no_obj in range(num_objects):
             maskmaps[i,0,:,:] = torch.maximum(maskmaps[i,0,:,:], masks[no_obj] * (float(no_obj+1)%8/7))
             maskmaps[i,1,:,:] = torch.maximum(maskmaps[i,1,:,:], masks[no_obj] * (float(no_obj+1)%4/3))
             maskmaps[i,2,:,:] = torch.maximum(maskmaps[i,2,:,:], masks[no_obj] * (float(no_obj+1)%2/1))
