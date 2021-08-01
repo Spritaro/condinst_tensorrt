@@ -21,10 +21,11 @@ def get_centroid_indices(masks):
         centroids: Tensor[num_objects, (x, y)]
     """
     _, height, width = masks.shape
+    dtype = masks.dtype
     device = masks.device
 
-    location_x = torch.arange(0, width, 1, dtype=torch.float32, device=device) # Tensor[width]
-    location_y = torch.arange(0, height, 1, dtype=torch.float32, device=device) # Tensor[height]
+    location_x = torch.arange(0, width, 1, dtype=dtype, device=device) # Tensor[width]
+    location_y = torch.arange(0, height, 1, dtype=dtype, device=device) # Tensor[height]
 
     total_area = masks.sum(dim=(1,2)) + 1e-9
     centroids_x = torch.sum(masks.sum(dim=1) * location_x[None,:], dim=1) / total_area # Tensor[num_objects]
@@ -39,22 +40,23 @@ def generate_heatmap(gt_labels, gt_masks, num_classes, sigma=1.0):
     Params:
         gt_labels: Tensor[num_batch]
         gt_masks: Tensor[num_objects, height, width]
-        num_classes: int
-        sigma: float standard deviation for gaussian distribution
+        num_classes:
+        sigma: standard deviation for gaussian distribution
     Returns:
         heatmap: Tensor[num_classes, height, width]
         centroids: Tensor[num_objects, (x, y)]
     """
     num_objects, height, width = gt_masks.shape
+    dtype = gt_masks.dtype
     device = gt_masks.device
 
     centroids = get_centroid_indices(gt_masks) # Tensor[num_objects, (x, y)]
 
-    location_x = torch.arange(0, width, 1, dtype=torch.float32, device=device) # Tensor[width]
-    location_y = torch.arange(0, height, 1, dtype=torch.float32, device=device) # Tensor[height]
+    location_x = torch.arange(0, width, 1, dtype=dtype, device=device) # Tensor[width]
+    location_y = torch.arange(0, height, 1, dtype=dtype, device=device) # Tensor[height]
     location_y, location_x = torch.meshgrid(location_y, location_x) # [height, width], [height, width]
 
-    heatmap = torch.zeros(size=(num_classes, height, width), dtype=torch.float32, device=device)
+    heatmap = torch.zeros(size=(num_classes, height, width), dtype=dtype, device=device)
 
     for i in range(num_objects):
         label = gt_labels[i]
@@ -68,21 +70,22 @@ def generate_heatmap(gt_labels, gt_masks, num_classes, sigma=1.0):
 
     return heatmap, centroids
 
-def heatmap_focal_loss(preds, gt_heatmap, alpha, gamma):
+def heatmap_focal_loss(preds, gt_heatmap, alpha, gamma, eps=1e-6):
     """
     Params:
         preds: Tensor[num_classes, height, width]
         gt_heatmap: Tensor[num_classes, height, width]
         alpha:
         gamma: how much you want to reduce penalty around the ground truth locations
+        eps: add small number to prevent inf error
     Returns:
         loss: Tensor[]
     """
     # See CornerNet paper for detail https://arxiv.org/abs/1808.01244
     loss = -torch.where(
         gt_heatmap == 1,
-        (1 - preds)**alpha * torch.log(preds), # Loss for positive locations
-        (1 - gt_heatmap) ** gamma * (preds)**alpha * torch.log(1 - preds) # loss for negative locations
+        (1 - preds)**alpha * torch.log(preds + eps), # Loss for positive locations
+        (1 - gt_heatmap) ** gamma * (preds)**alpha * torch.log(1 - preds + eps) # loss for negative locations
     ).sum()
     return loss
 
@@ -249,12 +252,15 @@ class CenterNet(nn.Module):
         _, feature_height, feature_width = ctr_logits.shape
         _, mask_height, mask_width = mask_logits.shape
         num_objects, _ = centroids.shape
+        dtype = ctr_logits.dtype
         device = ctr_logits.device
 
         # Absolute coordinates
         # NOTE: TensorRT7 does not support float range operation. Use cast instead.
-        location_x = torch.arange(0, mask_width, 1, dtype=torch.int32, device=device).float() # Tensor[mask_width]
-        location_y = torch.arange(0, mask_height, 1, dtype=torch.int32, device=device).float() # Tensor[mask_height]
+        location_x = torch.arange(0, mask_width, 1, dtype=torch.int32, device=device) # Tensor[mask_width]
+        location_y = torch.arange(0, mask_height, 1, dtype=torch.int32, device=device) # Tensor[mask_height]
+        location_x = location_x.to(dtype)
+        location_y = location_y.to(dtype)
         location_y, location_x = torch.meshgrid(location_y, location_x) # Tensor[mask_height, mask_width], Tensor[mask_height, mask_width]
         location_xs = location_x[None,:,:].repeat(num_objects, 1, 1) # Tensor[num_objects, mask_height, mask_width]
         location_ys = location_y[None,:,:].repeat(num_objects, 1, 1) # Tensor[num_objects, mask_height, mask_width]
@@ -319,6 +325,7 @@ class CenterNet(nn.Module):
         """
         num_batch, num_classes, feature_height, feature_width = cls_logits.shape
         num_batch, num_filters, mask_height, mask_width = mask_logits.shape
+        dtype = cls_logits.dtype
         device = cls_logits.device
 
         # Assign each GT mask to one point in feature map, then calculate loss
@@ -328,13 +335,13 @@ class CenterNet(nn.Module):
 
             # Skip if no object in targets
             if len(targets[i]) == 0:
-                heatmap_losses.append(torch.tensor(0, dtype=torch.float32, device=device))
-                mask_losses.append(torch.tensor(0, dtype=torch.float32, device=device))
+                heatmap_losses.append(torch.tensor(0, dtype=dtype, device=device))
+                mask_losses.append(torch.tensor(0, dtype=dtype, device=device))
                 continue
 
             # Convert list of dicts to Tensors
             gt_labels = torch.as_tensor([category_id_to_label[obj['category_id']] for obj in targets[i]], dtype=torch.int64, device=device) # Tensor[num_objects]
-            gt_masks = torch.stack([torch.as_tensor(obj['segmentation'], dtype=torch.float32, device=device) for obj in targets[i]], dim=0) # Tensor[num_objects, image_height, image_width]
+            gt_masks = torch.stack([torch.as_tensor(obj['segmentation'], dtype=dtype, device=device) for obj in targets[i]], dim=0) # Tensor[num_objects, image_height, image_width]
 
             # Downsample GT masks
             gt_masks_size_feature = F.interpolate(gt_masks[None,...], size=(feature_height, feature_width)) # Tensor[1, num_objects, feature_height, feature_width]

@@ -77,9 +77,10 @@ if __name__ == '__main__':
         max_epochs=6,
         gpus=1,
         val_check_interval=10000,
-        accumulate_grad_batches=30,
+        accumulate_grad_batches=16,
         callbacks=[checkpoint_callback],
         # resume_from_checkpoint='checkpoints/centernet-condinst-epoch=00-val_loss=0.00.ckpt'
+        precision=16
     )
     trainer.fit(model, coco_train, coco_val)
     # trainer.fit(model, coco_train)

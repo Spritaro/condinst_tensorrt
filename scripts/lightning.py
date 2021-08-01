@@ -131,7 +131,8 @@ class LitCenterNet(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=5e-4)
+        # optimizer = torch.optim.Adam(self.parameters(), lr=5e-4)
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-4, eps=1e-6)
         return optimizer
 
     def on_train_end(self):
