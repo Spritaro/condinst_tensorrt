@@ -46,11 +46,11 @@ parser.add_argument('--checkpoint_dir', type=str, default='../checkpoints', help
 parser.add_argument('--checkpoint_name', type=str, default='last', help="name of checkpoint file (default 'last')")
 
 # Output options
-parser.add_argument('--save_model', type=str, default='../models/model.py', help="path to save trained model (defalut '../models/model.py')")
+parser.add_argument('--save_model', type=str, default='../models/model.pt', help="path to save trained model (defalut '../models/model.py')")
 
 # Test options
 parser.add_argument('--topk', type=int, default=40, help="max number of object to detect during inference (default 40)")
-parser.add_argument('--load_model', type=str, default='../models/model.py', help="path to load trained model (default '../models/model.py')")
+parser.add_argument('--load_model', type=str, default='../models/model.pt', help="path to load trained model (default '../models/model.py')")
 parser.add_argument('--export_onnx', type=str, default='../models/model.onnx', help="path to export as onnx model (default ../models/model.onnx')")
 parser.add_argument('--test_image_dir', type=str, default='../test_image', help="path to test image dir (default '../test_image')")
 parser.add_argument('--test_output_dir', type=str, default='../test_output', help="path to test output dir (default '../test_output')")
