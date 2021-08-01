@@ -41,9 +41,9 @@ if __name__ == '__main__':
     # dataset_train = CocoSegmentationAlb(root=root_dir_val, annFile=ann_path_val, transform=transform)
     dataset_val = CocoSegmentationAlb(root=root_dir_val, annFile=ann_path_val, transform=transform)
 
-    coco_train = DataLoader(dataset_train, batch_size=4, collate_fn=lambda x: x)
+    coco_train = DataLoader(dataset_train, batch_size=8, collate_fn=lambda x: x, num_workers=4)
     # coco_train = DataLoader(dataset_val, batch_size=4, collate_fn=lambda x: x)
-    coco_val = DataLoader(dataset_val, batch_size=4, collate_fn=lambda x: x)
+    coco_val = DataLoader(dataset_val, batch_size=8, collate_fn=lambda x: x, num_workers=4)
 
     # Check dataset
     index = 0
