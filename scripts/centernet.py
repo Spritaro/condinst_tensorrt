@@ -217,9 +217,9 @@ class CenterNet(nn.Module):
         p2, p3, p4, p5, p6 = list(features.values())
 
         x = p2 + (
-            F.interpolate(p3, scale_factor=2, mode='bilinear') +
-            F.interpolate(p4, scale_factor=4, mode='bilinear') +
-            F.interpolate(p5, scale_factor=8, mode='bilinear'))
+            F.interpolate(p3, scale_factor=2, mode='bilinear', align_corners=False) +
+            F.interpolate(p4, scale_factor=4, mode='bilinear', align_corners=False) +
+            F.interpolate(p5, scale_factor=8, mode='bilinear', align_corners=False))
 
         cls_logits = self.cls_head(p4) # [num_batch, num_classes, feature_height, feature_width]
         ctr_logits = self.ctr_head(p4) # [num_batch, num_channels, feature_height, feature_width]
