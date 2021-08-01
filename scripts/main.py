@@ -1,4 +1,5 @@
 import albumentations as A
+import argparse
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -17,88 +18,120 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from lightning import LitCenterNet
 from dataset import CocoSegmentationAlb
 
+parser = argparse.ArgumentParser(description="Parameters for training and inference")
+parser.add_argument('command', type=str, help="train or test")
+
+# Dataset options
+parser.add_argument('--train_dir', type=str, required=True, help="path to train image dir (required)")
+parser.add_argument('--train_ann', type=str, required=True, help="path to train annotation path (required)")
+parser.add_argument('--val_dir', type=str, default=None, required=False, help="path to validation image dir (optional)")
+parser.add_argument('--val_ann', type=str, default=None, required=False, help="path to validation dataset dir (optional)")
+parser.add_argument('--num_classes', type=int, default=81, help="number of classes (default 81)")
+
+# Train options
+parser.add_argument('--pretrained_model', type=str, default=None, help="path to pretrained model (optional)")
+parser.add_argument('--input_width', type=int, default=640, required=False, help="width of input image (default 640)")
+parser.add_argument('--input_height', type=int, default=480, help="height of input image (default 480)")
+parser.add_argument('--batch_size', type=int, default=8, help="batch size (default 8)")
+parser.add_argument('--accumulate_grad_batches', type=int, default=16, help="number of gradients to accumulate (default 16)")
+parser.add_argument('--num_workers', type=int, default=4, help="number of workers for data loader (default 4)")
+parser.add_argument('--mixed_precision', type=bool, default=True, help="allow FP16 training (default True)")
+parser.add_argument('--resume_from_checkpoint', type=str, default=None, help="path to checkpoint file (optional)")
+parser.add_argument('--max_epochs', type=int, default=10, help="number of epochs (default 10")
+parser.add_argument('--gpus', type=int, default=1, help="number of GPUs to train (0 for CPU, -1 for all GPUs) (default 1)")
+
+# Logging options
+parser.add_argument('--tensorboard_log_dir', type=str, default='../runs', help="path to TensorBoard log dir (default '../runs')")
+parser.add_argument('--checkpoint_dir', type=str, default='../checkpoints', help="path to checkpoint directory (default '../checkpoints')")
+parser.add_argument('--checkpoint_name', type=str, default='last', help="name of checkpoint file (default 'last')")
+
+# Output options
+parser.add_argument('--save_model', type=str, default='../models/model.py', help="path to save trained model (defalut '../models/model.py')")
+
+# Test options
+parser.add_argument('--topk', type=int, default=40, help="max number of object to detect during inference (default 40)")
+parser.add_argument('--load_model', type=str, default='../models/model.py', help="path to load trained model (default '../models/model.py')")
+parser.add_argument('--export_onnx', type=str, default='../models/model.onnx', help="path to export as onnx model (default ../models/model.onnx')")
+parser.add_argument('--test_image_dir', type=str, default='../test_image', help="path to test image dir (default '../test_image')")
+parser.add_argument('--test_output_dir', type=str, default='../test_output', help="path to test output dir (default '../test_output')")
+
+args = parser.parse_args()
+assert args.command == 'train' or args.command == 'test'
 
 if __name__ == '__main__':
-    # Transform
-    transform = A.Compose([
-        A.RandomScale(scale_limit=0.5, interpolation=1, p=0.5),
-        A.transforms.PadIfNeeded(min_height=480, min_width=640, border_mode=cv2.BORDER_CONSTANT, value=0),
-        # A.transforms.PadIfNeeded(min_height=480, min_width=640),
-        A.RandomCrop(width=640, height=480),
-        A.HorizontalFlip(p=0.5),
-        A.RandomBrightnessContrast(p=0.2),
-        A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ToTensorV2(),
-    ])
 
-    # Load data
-    root_dir_train = os.path.expanduser('~/dataset/train2017')
-    root_dir_val = os.path.expanduser('~/dataset/val2017')
-    ann_path_train = os.path.expanduser('~/dataset/annotations_trainval2017/annotations/instances_train2017.json')
-    ann_path_val = os.path.expanduser('~/dataset/annotations_trainval2017/annotations/instances_val2017.json')
+    if args.command == 'train':
 
-    dataset_train = CocoSegmentationAlb(root=root_dir_train, annFile=ann_path_train, transform=transform)
-    # dataset_train = CocoSegmentationAlb(root=root_dir_val, annFile=ann_path_val, transform=transform)
-    dataset_val = CocoSegmentationAlb(root=root_dir_val, annFile=ann_path_val, transform=transform)
+        # Transform
+        transform = A.Compose([
+            A.RandomScale(scale_limit=0.5, interpolation=cv2.INTER_LINEAR, p=0.5),
+            A.transforms.PadIfNeeded(min_width=args.input_width, min_height=args.input_height, border_mode=cv2.BORDER_CONSTANT, value=0),
+            A.RandomCrop(width=args.input_width, height=args.input_height),
+            A.HorizontalFlip(p=0.5),
+            A.RandomBrightnessContrast(p=0.2),
+            A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ToTensorV2(),
+        ])
 
-    coco_train = DataLoader(dataset_train, batch_size=8, collate_fn=lambda x: x, num_workers=4)
-    # coco_train = DataLoader(dataset_val, batch_size=4, collate_fn=lambda x: x)
-    coco_val = DataLoader(dataset_val, batch_size=8, collate_fn=lambda x: x, num_workers=4)
+        # Load data
+        root_dir_train = os.path.expanduser(args.train_dir)
+        ann_path_train = os.path.expanduser(args.train_ann)
+        dataset_train = CocoSegmentationAlb(root=root_dir_train, annFile=ann_path_train, transform=transform)
+        coco_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=lambda x: x, num_workers=args.num_workers)
 
-    # Check dataset
-    index = 0
-    batch = dataset_train.__getitem__(index)
-    image, target = batch
-    plt.imshow(image.permute(1,2,0))
-    plt.savefig('images/train.png')
-    mask = target[0]['segmentation']
-    plt.imshow(mask)
-    plt.savefig('images/masks.png')
+        if args.val_dir and args.val_ann:
+            root_dir_val = os.path.expanduser(args.val_dir)
+            ann_path_val = os.path.expanduser(args.val_ann)
+            dataset_val = CocoSegmentationAlb(root=root_dir_val, annFile=ann_path_val, transform=transform)
+            coco_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=lambda x: x, num_workers=args.num_workers)
+        else:
+            coco_val = None
 
-    # Save checkpoints
-    checkpoint_callback = ModelCheckpoint(
-        dirpath='checkpoints',
-        filename='centernet-condinst-{epoch:02d}-{step:06d}-{val_loss:.2f}',
-    )
+        # Save checkpoints
+        checkpoint_callback = ModelCheckpoint(
+            dirpath=args.checkpoint_dir,
+            filename=args.checkpoint_name,
+        )
 
-    # Create model for training
-    model = LitCenterNet(mode='training', num_classes=81)
+        # Create model for training
+        model = LitCenterNet(mode='training', num_classes=args.num_classes)
 
-    # model = LitCenterNet.load_from_checkpoint(
-    #     'checkpoints/centernet-condinst-epoch=00-val_loss=0.00.ckpt',
-    #     training=True, num_classes=81)
+        # Load pretrained weights
+        if args.pretrained_model:
+            model.load_state_dict(torch.load(args.pretrained_model), strict=False)
 
-    # filepath = 'centernet.pt'
-    # model.load_state_dict(torch.load(filepath)) # Load model
+        # Mixed precision
+        if args.mixed_precision:
+            precision = 16
+        else:
+            precision = 32
 
-    # Logger
-    tb_logger = pl_loggers.TensorBoardLogger(save_dir="./runs", default_hp_metric=False)
+        # Logger
+        tb_logger = pl_loggers.TensorBoardLogger(save_dir=args.tensorboard_log_dir, default_hp_metric=False)
 
-    # Train model
-    trainer = pl.Trainer(
-        # max_epochs=1,
-        max_epochs=6,
-        gpus=1,
-        val_check_interval=10000,
-        accumulate_grad_batches=16,
-        callbacks=[checkpoint_callback],
-        # resume_from_checkpoint='checkpoints/centernet-condinst-epoch=00-val_loss=0.00.ckpt'
-        precision=16,
-        logger=tb_logger
-    )
-    trainer.fit(model, coco_train, coco_val)
-    # trainer.fit(model, coco_train)
+        # Train model
+        trainer = pl.Trainer(
+            max_epochs=args.max_epochs,
+            gpus=args.gpus,
+            val_check_interval=1.0, # validate once per epoch
+            accumulate_grad_batches=args.accumulate_grad_batches,
+            callbacks=[checkpoint_callback],
+            precision=precision,
+            logger=tb_logger
+        )
+        trainer.fit(model, coco_train, coco_val)
 
-    # Save model
-    filepath = 'centernet.pt'
-    torch.save(model.state_dict(), filepath)
+        # Save model
+        torch.save(model.state_dict(), args.save_model)
 
-    # Load model for inference
-    filepath = 'centernet.pt'
-    model = LitCenterNet(mode='inference', num_classes=81, topk=40)
-    model.load_state_dict(torch.load(filepath)) # Load model
+    else:
 
-    # Export to ONNX
-    filepath = 'centernet.onnx'
-    input_sample = torch.randn((1, 3, 480, 640))
-    model.to_onnx(filepath, input_sample, export_params=True, opset_version=11)
+        # Load model for inference
+        model = LitCenterNet(mode='inference', num_classes=args.num_classes, topk=args.topk)
+        model.load_state_dict(torch.load(args.load_model))
+
+        # Export to ONNX
+        input_sample = torch.randn((1, 3, args.input_height, args.input_width))
+        model.to_onnx(args.export_onnx, input_sample, export_params=True, opset_version=11)
+
+        # TODO: add test
