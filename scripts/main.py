@@ -22,8 +22,8 @@ parser = argparse.ArgumentParser(description="Parameters for training and infere
 parser.add_argument('command', type=str, help="train or test")
 
 # Dataset options
-parser.add_argument('--train_dir', type=str, required=True, help="path to train image dir (required)")
-parser.add_argument('--train_ann', type=str, required=True, help="path to train annotation path (required)")
+parser.add_argument('--train_dir', type=str, default=None, help="path to train image dir (required for training)")
+parser.add_argument('--train_ann', type=str, default=None, help="path to train annotation path (required for training)")
 parser.add_argument('--val_dir', type=str, default=None, required=False, help="path to validation image dir (optional)")
 parser.add_argument('--val_ann', type=str, default=None, required=False, help="path to validation dataset dir (optional)")
 parser.add_argument('--num_classes', type=int, default=81, help="number of classes (default 81)")
@@ -60,6 +60,7 @@ assert args.command == 'train' or args.command == 'test'
 if __name__ == '__main__':
 
     if args.command == 'train':
+        assert args.train_dir is not None and args.train_ann is not None
 
         # Transform
         transform = A.Compose([
@@ -135,6 +136,9 @@ if __name__ == '__main__':
 
         # Export to ONNX
         input_sample = torch.randn((1, 3, args.input_height, args.input_width))
+        if args.mixed_precision:
+            # Needs CUDA to support FP16
+            model.half().to('cuda')
         model.to_onnx(args.export_onnx, input_sample, export_params=True, opset_version=11)
 
         # TODO: add test
