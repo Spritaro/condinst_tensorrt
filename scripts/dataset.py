@@ -7,6 +7,11 @@ class CocoSegmentationAlb(CocoDetection):
     def __init__(self, root, annFile, transform):
         super().__init__(root=root, annFile=annFile, transform=transform)
 
+        categories = self.coco.dataset['categories']
+        self.category_id_to_class_label = {}
+        for label, category in enumerate(categories):
+            self.category_id_to_class_label[category['id']] = label
+
     def __getitem__(self, index):
 
         coco = self.coco
@@ -27,7 +32,7 @@ class CocoSegmentationAlb(CocoDetection):
 
         if self.transform is not None:
             # Get class labels
-            labels = [t['category_id'] for t in target]
+            labels = [self.category_id_to_class_label[t['category_id']] for t in target]
 
             # Apply transform
             transformed = self.transform(image=img, masks=masks, class_labels=labels)
@@ -41,7 +46,7 @@ class CocoSegmentationAlb(CocoDetection):
             target = []
             for label, mask in zip(labels, masks):
                 t = {
-                    'category_id': label,
+                    'class_labels': label,
                     'segmentation': mask
                 }
                 target.append(t)

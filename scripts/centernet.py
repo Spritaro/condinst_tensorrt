@@ -11,7 +11,6 @@ import torchvision
 from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
 from torchvision.ops.focal_loss import sigmoid_focal_loss
 
-from coco_category_id import category_id_to_label
 from loss import heatmap_focal_loss
 from loss import dice_loss
 
@@ -283,7 +282,7 @@ class CenterNet(nn.Module):
             cls_logits: Tensor[num_batch, num_classes, feature_height, feature_width]
             ctr_logits: Tensor[num_batch, num_channels, feature_height, feature_width]
             mask_logits: Tensor[num_batch, num_filters, mask_height, mask_width]
-            targets: List[List[Dict{'category_id': int, 'segmentations': Tensor[image_height, image_width]}]]
+            targets: List[List[Dict{'class_labels': int, 'segmentations': Tensor[image_height, image_width]}]]
         Returns:
             heatmap_loss: Tensor[]
             mask_loss: Tensor[]
@@ -305,7 +304,7 @@ class CenterNet(nn.Module):
                 continue
 
             # Convert list of dicts to Tensors
-            gt_labels = torch.as_tensor([category_id_to_label[obj['category_id']] for obj in targets[i]], dtype=torch.int64, device=device) # Tensor[num_objects]
+            gt_labels = torch.as_tensor([obj['class_labels'] for obj in targets[i]], dtype=torch.int64, device=device) # Tensor[num_objects]
             gt_masks = torch.stack([torch.as_tensor(obj['segmentation'], dtype=dtype, device=device) for obj in targets[i]], dim=0) # Tensor[num_objects, image_height, image_width]
 
             # Downsample GT masks

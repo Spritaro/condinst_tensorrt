@@ -26,7 +26,7 @@ parser.add_argument('--train_dir', type=str, default=None, help="path to train i
 parser.add_argument('--train_ann', type=str, default=None, help="path to train annotation path (required for training)")
 parser.add_argument('--val_dir', type=str, default=None, required=False, help="path to validation image dir (optional)")
 parser.add_argument('--val_ann', type=str, default=None, required=False, help="path to validation dataset dir (optional)")
-parser.add_argument('--num_classes', type=int, default=81, help="number of classes (default 81)")
+parser.add_argument('--num_classes', type=int, default=80, help="number of classes (default 80)")
 
 # Train options
 parser.add_argument('--pretrained_model', type=str, default=None, help="path to pretrained model (optional)")
