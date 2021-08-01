@@ -86,6 +86,7 @@ if __name__ == '__main__':
         image = cv2.imread(filename)
 
         # Preprocessing
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image = cv2.resize(image, dsize=(640, 480))
         image_normalized = (image.astype(np.float32) / 255. - np.array([0.485, 0.456, 0.406])) / np.array([0.229, 0.224, 0.225])
         image_normalized = image_normalized.transpose(2, 0, 1) # HWC -> CHW
