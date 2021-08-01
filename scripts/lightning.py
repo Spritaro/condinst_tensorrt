@@ -5,16 +5,14 @@ import pytorch_lightning as pl
 
 from centernet import CenterNet, generate_heatmap, get_heatmap_peaks
 
-def concat_images_and_heatmaps(images, cls_logits, ctr_logits, mask_logits, targets, model):
+def concat_images_and_heatmaps(images, cls_logits, ctr_logits, mask_logits, model):
     """
     Params:
         images: Tensor[num_batch, 3, H, W]
         cls_logits: Tensor[num_batch, num_classes, feature_height, feature_width]
         ctr_logits: Tensor[num_batch, num_channels, feature_height, feature_width]
         mask_logits: Tensor[num_batch, num_filters, mask_height, mask_width]
-        targets:
         model:
-        label:
     Returns:
         images_and_heatmaps: Tensor[num_batch*2, 3, h, w]
     """
@@ -33,10 +31,6 @@ def concat_images_and_heatmaps(images, cls_logits, ctr_logits, mask_logits, targ
     maskmaps = torch.zeros_like(resized_images)
 
     for i in range(num_batch):
-        # Skip if no object in targets
-        if len(targets[i]) == 0:
-            continue
-
         # Draw peak
         topk = 10
         labels, preds, points = get_heatmap_peaks(cls_logits[i:i+1], topk=topk)
@@ -94,7 +88,7 @@ class LitCenterNet(pl.LightningModule):
             tensorboard.add_scalar("mask_loss", mask_loss, self.global_step)
             tensorboard.add_scalar("loss", loss, self.global_step)
             # Display heatmaps
-            images_and_heatmaps = concat_images_and_heatmaps(images, cls_logits, ctr_logits, mask_logits, targets, self.centernet)
+            images_and_heatmaps = concat_images_and_heatmaps(images, cls_logits, ctr_logits, mask_logits, self.centernet)
             img_grid = torchvision.utils.make_grid(images_and_heatmaps, nrow=images.shape[0])
             tensorboard.add_image('images', img_grid, global_step=self.global_step)
 
