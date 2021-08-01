@@ -12,6 +12,8 @@ from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
 from torchvision.ops.focal_loss import sigmoid_focal_loss
 
 from coco_category_id import category_id_to_label
+from loss import heatmap_focal_loss
+from loss import dice_loss
 
 def get_centroid_indices(masks):
     """
@@ -70,25 +72,6 @@ def generate_heatmap(gt_labels, gt_masks, num_classes, sigma=1.0):
 
     return heatmap, centroids
 
-def heatmap_focal_loss(preds, gt_heatmap, alpha, gamma, eps=1e-6):
-    """
-    Params:
-        preds: Tensor[num_classes, height, width]
-        gt_heatmap: Tensor[num_classes, height, width]
-        alpha:
-        gamma: how much you want to reduce penalty around the ground truth locations
-        eps: add small number to prevent inf error
-    Returns:
-        loss: Tensor[]
-    """
-    # See CornerNet paper for detail https://arxiv.org/abs/1808.01244
-    loss = -torch.where(
-        gt_heatmap == 1,
-        (1 - preds)**alpha * torch.log(preds + eps), # Loss for positive locations
-        (1 - gt_heatmap) ** gamma * (preds)**alpha * torch.log(1 - preds + eps) # loss for negative locations
-    ).sum()
-    return loss
-
 def get_heatmap_peaks(cls_logits, topk=100, kernel=3):
     """
     Params:
@@ -121,24 +104,6 @@ def get_heatmap_peaks(cls_logits, topk=100, kernel=3):
     points = torch.stack([xs, ys], dim=2) # Tensor[num_batch, topk, (x,y)]
 
     return labels, cls_preds, points
-
-def dice_loss(inputs, targets, smooth=1):
-    """
-    Params:
-        inputs: arbitrary size of Tensor
-        targets: arbitrary size of Tensor
-        smooth: smoothing factor, default 1
-    Returns:
-        loss: Tensor[]
-    """
-    #flatten inputs and targets tensors
-    inputs = inputs.view(-1)
-    targets = targets.view(-1)
-
-    intersection = (inputs * targets).sum()
-    dice = (2.*intersection + smooth)/(inputs.sum() + targets.sum() + smooth)
-
-    return 1 - dice
 
 class CenterNet(nn.Module):
     def __init__(self, mode, num_classes, topk=100):
