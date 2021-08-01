@@ -43,7 +43,6 @@ parser.add_argument('--gpus', type=int, default=1, help="number of GPUs to train
 # Logging options
 parser.add_argument('--tensorboard_log_dir', type=str, default='../runs', help="path to TensorBoard log dir (default '../runs')")
 parser.add_argument('--checkpoint_dir', type=str, default='../checkpoints', help="path to checkpoint directory (default '../checkpoints')")
-parser.add_argument('--checkpoint_name', type=str, default='last', help="name of checkpoint file (default 'last')")
 
 # Output options
 parser.add_argument('--save_model', type=str, default='../models/model.pt', help="path to save trained model (defalut '../models/model.py')")
@@ -88,9 +87,11 @@ if __name__ == '__main__':
             coco_val = None
 
         # Save checkpoints
+        os.makedirs(args.checkpoint_dir, exist_ok=True)
         checkpoint_callback = ModelCheckpoint(
             dirpath=args.checkpoint_dir,
-            filename=args.checkpoint_name,
+            filename='{epoch:03d}-{step:06d}',
+            save_last=True
         )
 
         # Create model for training
@@ -107,6 +108,7 @@ if __name__ == '__main__':
             precision = 32
 
         # Logger
+        os.makedirs(args.tensorboard_log_dir, exist_ok=True)
         tb_logger = pl_loggers.TensorBoardLogger(save_dir=args.tensorboard_log_dir, default_hp_metric=False)
 
         # Train model
@@ -122,6 +124,7 @@ if __name__ == '__main__':
         trainer.fit(model, coco_train, coco_val)
 
         # Save model
+        os.makedirs(os.path.dirname(args.save_model), exist_ok=True)
         torch.save(model.state_dict(), args.save_model)
 
     else:
