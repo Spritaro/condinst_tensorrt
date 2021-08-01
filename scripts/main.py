@@ -119,6 +119,7 @@ if __name__ == '__main__':
             val_check_interval=1.0, # validate once per epoch
             accumulate_grad_batches=args.accumulate_grad_batches,
             callbacks=[checkpoint_callback],
+            resume_from_checkpoint=args.resume_from_checkpoint,
             precision=precision,
             logger=tb_logger
         )
