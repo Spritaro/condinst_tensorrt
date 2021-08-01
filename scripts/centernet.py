@@ -154,53 +154,42 @@ class CenterNet(nn.Module):
         num_channels = self.conv3_b
 
         # self.backbone = resnet_fpn_backbone('resnet50', pretrained=True, trainable_layers=5)
-        self.backbone = torchvision.models.resnet50(pretrained=True)
-
-        self.upsample = nn.Sequential(
-            nn.Conv2d(in_channels=2048, out_channels=256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=256),
-            nn.ReLU(),
-            nn.Upsample(scale_factor=2, mode='bilinear'),
-
-            nn.Conv2d(in_channels=256, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=128),
-            nn.ReLU(),
-            nn.Upsample(scale_factor=2, mode='bilinear'),
-
-            # nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, padding=1),
-            # nn.BatchNorm2d(num_features=64),
-            # nn.ReLU(),
-            # nn.Upsample(scale_factor=2, mode='bilinear'),
-        )
+        self.backbone = resnet_fpn_backbone('resnet34', pretrained=True, trainable_layers=5)
 
         self.cls_head = nn.Sequential(
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=128),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=256),
             nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=128),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=256),
             nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=128),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=256),
             nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=num_classes, kernel_size=1, padding=0)
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=256),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=256, out_channels=num_classes, kernel_size=1, padding=0)
         )
 
         self.ctr_head = nn.Sequential(
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=128),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=256),
             nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=128),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=256),
             nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=128),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=256),
             nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=num_channels, kernel_size=1, padding=0)
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=256),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=256, out_channels=num_channels, kernel_size=1, padding=0)
         )
 
         self.mask_head = nn.Sequential(
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=256, out_channels=128, kernel_size=3, padding=1),
             nn.BatchNorm2d(num_features=128),
             nn.ReLU(),
             nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
@@ -222,24 +211,18 @@ class CenterNet(nn.Module):
         nn.init.constant_(self.cls_head[-1].bias, bias)
 
     def forward(self, images):
-        images = images.to(dtype=torch.float32)
+        images = images.to(dtype=torch.float16)
 
-        # features = self.backbone(images)
-        # x = list(features.values())[0]
+        features = self.backbone(images)
+        p2, p3, p4, p5, p6 = list(features.values())
 
-        x = self.backbone.conv1(images)
-        x = self.backbone.bn1(x)
-        x = self.backbone.relu(x)
-        x = self.backbone.maxpool(x)
-        x = self.backbone.layer1(x) # 1/4
-        x = self.backbone.layer2(x) # 1/8
-        x = self.backbone.layer3(x) # 1/16
-        x = self.backbone.layer4(x) # 1/32
+        x = p2 + (
+            F.interpolate(p3, scale_factor=2, mode='bilinear') +
+            F.interpolate(p4, scale_factor=4, mode='bilinear') +
+            F.interpolate(p5, scale_factor=8, mode='bilinear'))
 
-        x = self.upsample(x) # -> 1/16 -> 1/8
-
-        cls_logits = self.cls_head(x) # [num_batch, num_classes, feature_height, feature_width]
-        ctr_logits = self.ctr_head(x) # [num_batch, num_channels, feature_height, feature_width]
+        cls_logits = self.cls_head(p4) # [num_batch, num_classes, feature_height, feature_width]
+        ctr_logits = self.ctr_head(p4) # [num_batch, num_channels, feature_height, feature_width]
         mask_logits = self.mask_head(x) # [num_batch, num_filters, mask_height, mask_width]
 
         if self.mode == 'training':
