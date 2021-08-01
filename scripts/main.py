@@ -101,7 +101,10 @@ if __name__ == '__main__':
 
         # Load pretrained weights
         if args.pretrained_model:
-            model.load_state_dict(torch.load(args.pretrained_model), strict=False)
+            pretrained_dict = torch.load(args.pretrained_model)
+            model_dict = model.state_dict()
+            pretrained_dict = {k: v for k, v in pretrained_dict.items() if (k in model_dict and v.shape == model_dict[k].shape)}
+            model.load_state_dict(pretrained_dict, strict=False)
 
         # Mixed precision
         if args.mixed_precision:
