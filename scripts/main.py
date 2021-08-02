@@ -21,7 +21,7 @@ from lightning import LitCondInst
 from dataset import CocoSegmentationAlb
 
 parser = argparse.ArgumentParser(description="Parameters for training and inference")
-parser.add_argument('command', type=str, help="train or test")
+parser.add_argument('command', type=str, help="train or test or export")
 
 # Dataset options
 parser.add_argument('--train_dir', type=str, default=None, help="path to train image dir (required for training)")
@@ -53,12 +53,14 @@ parser.add_argument('--save_model', type=str, default='../models/model.pt', help
 # Test options
 parser.add_argument('--topk', type=int, default=40, help="max number of object to detect during inference (default 40)")
 parser.add_argument('--load_model', type=str, default='../models/model.pt', help="path to load trained model (default '../models/model.py')")
-parser.add_argument('--export_onnx', type=str, default=None, help="path to export as onnx model (optinal)")
 parser.add_argument('--test_image_dir', type=str, default='../test_image', help="path to test image dir (default '../test_image')")
 parser.add_argument('--test_output_dir', type=str, default='../test_output', help="path to test output dir (default '../test_output')")
 
+# Export options
+parser.add_argument('--export_onnx', type=str, default='../models/model.onnx', help="path to export onnx model (default ../models/model.onnx)")
+
 args = parser.parse_args()
-assert args.command == 'train' or args.command == 'test'
+assert args.command == 'train' or args.command == 'test' or args.command == 'export'
 
 if __name__ == '__main__':
 
@@ -137,7 +139,7 @@ if __name__ == '__main__':
 
     else:
 
-        # Load model for inference
+        # Load model for test or export
         print("Loading model")
         model = LitCondInst(mode='inference', num_classes=args.num_classes, topk=args.topk)
         model.load_state_dict(torch.load(args.load_model))
@@ -145,73 +147,77 @@ if __name__ == '__main__':
             # Needs CUDA to support FP16
             model.half().to('cuda')
 
-        # Export to ONNX
-        if args.export_onnx:
+        if args.command == 'test':
+
+            # Get list of image paths
+            image_paths = glob.glob(os.path.join(args.test_image_dir, '*.jpg'))
+            image_paths += glob.glob(os.path.join(args.test_image_dir, '*.jpeg'))
+            image_paths += glob.glob(os.path.join(args.test_image_dir, '*.png'))
+
+            for image_path in image_paths:
+                print("Test {}".format(image_path))
+
+                # Load test images
+                image = cv2.imread(os.path.join(image_path))
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+                # Preprocessing
+                image = cv2.resize(image, dsize=(args.input_width, args.input_height))
+                image_normalized = (image.astype(np.float32) / 255. - np.array([0.485, 0.456, 0.406])) / np.array([0.229, 0.224, 0.225])
+                image_normalized = image_normalized.transpose(2, 0, 1) # HWC -> CHW
+                image_normalized = image_normalized[None,:,:,:] # CHW -> NCHW
+                image_normalized = torch.from_numpy(image_normalized).clone()
+
+                # Use GPU if available
+                device = 'cuda' if torch.cuda.is_available() else 'cpu'
+                image_normalized = image_normalized.to(device)
+
+                # Inference
+                labels, probs, masks = model(image_normalized)
+
+                # Conver to numpy array
+                labels = labels.to('cpu').detach().numpy().copy()
+                probs = probs.to('cpu').detach().numpy().copy()
+                masks = masks.to('cpu').detach().numpy().copy()
+
+                # Post processing
+                threshold=0.5
+                num_objects, = probs[probs > threshold].shape
+                print("{} obects detected".format(num_objects))
+
+                probs = probs[0,:num_objects]
+                labels = labels[0,:num_objects]
+                masks = masks[0,:num_objects,:,:]
+
+                masks = masks.transpose(1, 2, 0)
+                masks = masks.astype(np.float32())
+                masks = cv2.resize(masks, dsize=(args.input_width, args.input_height), interpolation=cv2.INTER_LINEAR)
+                masks = (masks > 0.5).astype(np.float32)
+
+                # Add channel dimension if removed by cv2.resize()
+                if len(masks.shape) == 2:
+                    masks = masks[...,None]
+
+                # Visualize masks
+                mask_visualize = np.zeros((args.input_height, args.input_width, 3), dtype=np.float32)
+                for i in range(masks.shape[2]):
+                    mask_visualize[:,:,0] += masks[:,:,i] * (float(i+1)%8/7)
+                    mask_visualize[:,:,1] += masks[:,:,i] * (float(i+1)%4/3)
+                    mask_visualize[:,:,2] += masks[:,:,i] * (float(i+1)%2/1)
+                mask_visualize = np.clip(mask_visualize, 0, 1)
+                mask_visualize = (mask_visualize * 255).astype(np.int8)
+                image_visualize = image / 2 + mask_visualize / 2
+
+                # Save results
+                save_path = os.path.join(args.test_output_dir, os.path.basename(image_path))
+                print("Saving to {}".format(save_path))
+                os.makedirs(args.test_output_dir, exist_ok=True)
+                cv2.imwrite(save_path, image_visualize)
+
+        else:
+
+            # Export to ONNX
             print("Exporting to ONNX")
             input_sample = torch.randn((1, 3, args.input_height, args.input_width))
             model.to_onnx(args.export_onnx, input_sample, export_params=True, opset_version=11)
-
-        # Get list of image paths
-        image_paths = glob.glob(os.path.join(args.test_image_dir, '*.jpg'))
-        image_paths += glob.glob(os.path.join(args.test_image_dir, '*.jpeg'))
-        image_paths += glob.glob(os.path.join(args.test_image_dir, '*.png'))
-
-        for image_path in image_paths:
-            print("Test {}".format(image_path))
-
-            # Load test images
-            image = cv2.imread(os.path.join(image_path))
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-            # Preprocessing
-            image = cv2.resize(image, dsize=(args.input_width, args.input_height))
-            image_normalized = (image.astype(np.float32) / 255. - np.array([0.485, 0.456, 0.406])) / np.array([0.229, 0.224, 0.225])
-            image_normalized = image_normalized.transpose(2, 0, 1) # HWC -> CHW
-            image_normalized = image_normalized[None,:,:,:] # CHW -> NCHW
-            image_normalized = torch.from_numpy(image_normalized).clone()
-
-            # Use GPU if available
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
-            image_normalized = image_normalized.to(device)
-
-            # Inference
-            labels, probs, masks = model(image_normalized)
-
-            # Conver to numpy array
-            labels = labels.to('cpu').detach().numpy().copy()
-            probs = probs.to('cpu').detach().numpy().copy()
-            masks = masks.to('cpu').detach().numpy().copy()
-
-            # Post processing
-            threshold=0.5
-            num_objects, = probs[probs > threshold].shape
-            print("{} obects detected".format(num_objects))
-
-            probs = probs[0,:num_objects]
-            labels = labels[0,:num_objects]
-            masks = masks[0,:num_objects,:,:]
-
-            masks = masks.transpose(1, 2, 0)
-            masks = masks.astype(np.float32())
-            masks = cv2.resize(masks, dsize=(args.input_width, args.input_height), interpolation=cv2.INTER_LINEAR)
-            masks = (masks > 0.5).astype(np.float32)
-
-            # Add channel dimension if removed by cv2.resize()
-            if len(masks.shape) == 2:
-                masks = masks[...,None]
-
-            # Visualize masks
-            mask_visualize = np.zeros((args.input_height, args.input_width, 3), dtype=np.float32)
-            for i in range(masks.shape[2]):
-                mask_visualize[:,:,0] += masks[:,:,i] * (float(i+1)%8/7)
-                mask_visualize[:,:,1] += masks[:,:,i] * (float(i+1)%4/3)
-                mask_visualize[:,:,2] += masks[:,:,i] * (float(i+1)%2/1)
-            mask_visualize = np.clip(mask_visualize, 0, 1)
-            mask_visualize = (mask_visualize * 255).astype(np.int8)
-            image_visualize = image / 2 + mask_visualize / 2
-
-            # Save results
-            save_path = os.path.join(args.test_output_dir, os.path.basename(image_path))
-            print("Saving to {}".format(save_path))
-            os.makedirs(args.test_output_dir, exist_ok=True)
-            cv2.imwrite(save_path, image_visualize)
+            print("Done")
