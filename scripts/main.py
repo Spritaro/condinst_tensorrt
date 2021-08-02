@@ -185,12 +185,13 @@ if __name__ == '__main__':
                 num_objects, = probs[probs > threshold].shape
                 print("{} obects detected".format(num_objects))
 
-                probs = probs[0,:num_objects]
-                labels = labels[0,:num_objects]
-                masks = masks[0,:num_objects,:,:]
+                if num_objects > 0:
+                    masks = masks[0,:num_objects,:,:]
+                else:
+                    masks = np.zeros((1, args.input_height, args.input_width), dtype=np.float32)
 
                 masks = masks.transpose(1, 2, 0)
-                masks = masks.astype(np.float32())
+                masks = masks.astype(np.float32)
                 masks = cv2.resize(masks, dsize=(args.input_width, args.input_height), interpolation=cv2.INTER_LINEAR)
                 masks = (masks > 0.5).astype(np.float32)
 
