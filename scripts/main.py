@@ -17,7 +17,7 @@ import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from lightning import LitCenterNet
+from lightning import LitCondInst
 from dataset import CocoSegmentationAlb
 
 parser = argparse.ArgumentParser(description="Parameters for training and inference")
@@ -99,7 +99,7 @@ if __name__ == '__main__':
         )
 
         # Create model for training
-        model = LitCenterNet(mode='training', num_classes=args.num_classes, learning_rate=args.learning_rate)
+        model = LitCondInst(mode='training', num_classes=args.num_classes, learning_rate=args.learning_rate)
 
         # Load pretrained weights
         if args.pretrained_model:
@@ -139,7 +139,7 @@ if __name__ == '__main__':
 
         # Load model for inference
         print("Loading model")
-        model = LitCenterNet(mode='inference', num_classes=args.num_classes, topk=args.topk)
+        model = LitCondInst(mode='inference', num_classes=args.num_classes, topk=args.topk)
         model.load_state_dict(torch.load(args.load_model))
         if args.mixed_precision:
             # Needs CUDA to support FP16

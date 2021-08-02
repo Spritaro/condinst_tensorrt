@@ -104,7 +104,7 @@ def get_heatmap_peaks(cls_logits, topk=100, kernel=3):
 
     return labels, cls_preds, points
 
-class CenterNet(nn.Module):
+class CondInst(nn.Module):
     def __init__(self, mode, num_classes, topk=100):
         super().__init__()
         assert mode in ['training', 'inference']

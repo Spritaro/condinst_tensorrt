@@ -5,7 +5,7 @@ import pycuda.driver as cuda
 import tensorrt as trt
 import time
 
-class CenterNetCondInst(object):
+class CondInst(object):
 
     def __init__(self, filepath):
 
@@ -70,8 +70,8 @@ class CenterNetCondInst(object):
 if __name__ == '__main__':
 
     # Load TensorRT engine
-    model_filename = "centernet.engine"
-    centernet = CenterNetCondInst(model_filename)
+    model_filename = "model.engine"
+    condinst = CondInst(model_filename)
 
     image_filenames = [
         "images/000000041888.jpg",
@@ -93,7 +93,7 @@ if __name__ == '__main__':
         image_normalized = image_normalized[None,:,:,:] # CHW -> NCHW
 
         # Perform inference
-        probs, labels, masks, t = centernet.infer(image_normalized)
+        probs, labels, masks, t = condinst.infer(image_normalized)
         print("Inference time {} s".format(t))
 
         # Postprocessing
