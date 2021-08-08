@@ -5,6 +5,75 @@ import pytorch_lightning as pl
 
 from condinst import CondInst, generate_heatmap, get_heatmap_peaks
 
+def calc_mask_ious(labels, scores, masks, targets, score_threshold=0.3):
+    """
+    Params:
+        labels: Tensor[num_batch, topk]
+        scores: Tensor[num_batch, topk]
+        masks: Tensor[num_batch, topk, mask_height, mask_width]
+        targets: List[List[Dict{'class_labels': int, 'segmentations': Tensor[image_height, image_width]}]]
+    Returns:
+        matched_gt_labels: List[Tensor[]]
+        matched_scores: List[Tensor[]]
+        matched_ious: List[Tensor[]]
+    """
+    num_batch, topk = scores.shape
+    _, _, mask_height, mask_width = masks.shape
+    dtype = scores.dtype
+    device = scores.device
+
+    matched_gt_labels = []
+    matched_scores = []
+    matched_ious = []
+    for batch_i in range(num_batch):
+
+        # Skip if no GT object in targets
+        if len(targets[batch_i]) == 0:
+            continue
+
+        # Convert list of dicts to Tensors
+        gt_labels = torch.as_tensor([obj['class_labels'] for obj in targets[batch_i]], dtype=torch.int64, device=device) # Tensor[num_objects]
+        gt_masks = torch.stack([torch.as_tensor(obj['segmentation'], dtype=dtype, device=device) for obj in targets[batch_i]], dim=0) # Tensor[num_objects, image_height, image_width]
+
+        # Downsample GT masks
+        gt_masks_size_mask = F.interpolate(gt_masks[None,...], size=(mask_height, mask_width)) # Tensor[1, num_objects, mask_height, mask_width]
+        gt_masks_size_mask = gt_masks_size_mask[0,...] # Tensor[num_objects, feature_height, feature_width]
+
+        num_objects, _, _ = gt_masks_size_mask.shape
+        matched_gt_i = []
+        for pred_i in range(topk):
+
+            if scores[batch_i, pred_i] < score_threshold:
+                break
+
+            for gt_i in range(num_objects):
+
+                if gt_i in matched_gt_i:
+                    continue
+
+                if labels[batch_i, pred_i] != gt_labels[gt_i]:
+                    continue
+
+                inter = torch.sum(masks[batch_i, pred_i, ...] * gt_masks_size_mask[gt_i, ...])
+                union = torch.sum(masks[batch_i, pred_i, ...]) + torch.sum(gt_masks_size_mask[gt_i, ...]) - inter
+                eps = 1e-6
+                iou = inter / (union + eps)
+
+                # print("batch_i {} pred_i {} gt_i {} score {} iou {}".format(batch_i, pred_i, gt_i, scores[batch_i, pred_i], iou))
+
+                if iou < 0.5:
+                    continue
+
+                matched_gt_i.append(gt_i)
+                matched_gt_labels.append(gt_labels[gt_i])
+                matched_scores.append(scores[batch_i, pred_i])
+                matched_ious.append(iou)
+                break
+
+        # print("batch {} GT {} detected {}".format(batch_i, num_objects, len(matched_gt_i)))
+
+    return matched_gt_labels, matched_scores, matched_ious
+
 class LitCondInst(pl.LightningModule):
     def __init__(self, mode, num_classes, learning_rate=1e-4, topk=100, mask_loss_factor=1.0):
         super().__init__()
@@ -14,6 +83,12 @@ class LitCondInst(pl.LightningModule):
 
         # TensorBoard
         self.mode = mode
+
+        # mAP calculation
+        self.ious = [[] for i in range(num_classes)]
+        self.num_gts = [0 for i in range(num_classes)]
+        self.iou_thresholds = list(range(50, 95, 5)) # AP@[.50:.05:.95] 10 IoU level
+        self.recall_thresholds = list(range(0, 101, 1)) # 101 point interpolation
 
     def forward(self, images):
         outputs = self.condinst(images)
@@ -62,6 +137,85 @@ class LitCondInst(pl.LightningModule):
         tensorboard.add_scalar("val_loss", loss, self.global_step)
 
         return loss
+
+    def test_step(self, batch, batch_idx):
+
+        images = [img for img, _ in batch]
+        targets = [tgt for _, tgt in batch]
+        images = torch.stack(images, dim=0)
+
+        labels, scores, masks = self(images)
+        gt_labels, scores, ious = calc_mask_ious(labels, scores, masks, targets)
+        for gt_label, score, iou in zip(gt_labels, scores, ious):
+            self.ious[gt_label].append({'score': score, 'iou': iou})
+            self.num_gts[gt_label] += 1
+
+    def test_epoch_end(self, outputs):
+
+        # For each cateogry...
+        aps_per_category = []
+        for category_i, (ious, num_gt) in enumerate(zip(self.ious, self.num_gts)):
+            # Sort IoUs by score
+            ious = sorted(ious, key=lambda k: k['score'], reverse=True)
+
+            # For each IoU level...
+            aps_per_iou_threshold = []
+            for iou_threshold in self.iou_thresholds:
+                # Calculate precisions and recalls
+                tp = 0
+                fp = 0
+                precisions = []
+                recalls = []
+                for iou in ious:
+                    if iou['iou'] > iou_threshold / 100.0:
+                        tp += 1
+                    else:
+                        fp += 1
+                    precision = tp / (tp + fp)
+                    recall = tp / num_gt
+                    precisions.append(precision)
+                    recalls.append(recall)
+
+                    # print("TP FP {} {}".format(tp, fp))
+
+                # Calculate interpolated precisions
+                interplated_precisions = []
+                max_precision = 0
+                recall_i = len(self.recall_thresholds) - 1
+                for precision, recall in reversed(list(zip(precisions, recalls))):
+
+                    while recall <= self.recall_thresholds[recall_i] / 100.0:
+                        # print("recall_i {} max_precision {} recall {} threshold {}".format(recall_i, max_precision, recall, self.recall_thresholds[recall_i]/100.0))
+                        interplated_precisions.append(max_precision)
+                        recall_i -= 1
+                        if recall_i < 0:
+                            break
+
+                    if precision > max_precision:
+                        max_precision = precision
+
+                if len(interplated_precisions) < len(self.recall_thresholds):
+                    interplated_precisions.append(max_precision)
+                # print("interpolated precisions {}".format(interplated_precisions))
+
+                # Calculate average precision
+                ap = sum(interplated_precisions) / len(self.recall_thresholds)
+                print("category {} AP IoU=.{} {}".format(category_i, iou_threshold, ap))
+                aps_per_iou_threshold.append(ap)
+
+            # Calculate mAP for each category
+            if len(aps_per_iou_threshold) > 0:
+                map = sum(aps_per_iou_threshold) / len(aps_per_iou_threshold)
+            else:
+                map = 0.0
+            aps_per_category.append(map)
+
+        # Calculate mAP for multiple categories
+        map = sum(aps_per_category) / len(aps_per_category)
+
+        print("AP@[.50:.05:.95] {}".format(map))
+
+        return map
 
     def configure_optimizers(self):
         # optimizer = torch.optim.Adam(self.parameters(), lr=5e-4)

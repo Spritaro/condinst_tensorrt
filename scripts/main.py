@@ -26,8 +26,8 @@ parser.add_argument('command', type=str, help="train or test or export")
 # Dataset options
 parser.add_argument('--train_dir', type=str, default=None, help="path to train image dir (required for training)")
 parser.add_argument('--train_ann', type=str, default=None, help="path to train annotation path (required for training)")
-parser.add_argument('--val_dir', type=str, default=None, required=False, help="path to validation image dir (optional)")
-parser.add_argument('--val_ann', type=str, default=None, required=False, help="path to validation dataset dir (optional)")
+parser.add_argument('--val_dir', type=str, default=None, required=False, help="path to validation image dir (optional for training, required for eval)")
+parser.add_argument('--val_ann', type=str, default=None, required=False, help="path to validation dataset dir (optional for training, required for eval)")
 parser.add_argument('--num_classes', type=int, default=80, help="number of classes (default 80)")
 
 # Train options
@@ -60,14 +60,14 @@ parser.add_argument('--test_output_dir', type=str, default='../test_output', hel
 parser.add_argument('--export_onnx', type=str, default='../models/model.onnx', help="path to export onnx model (default ../models/model.onnx)")
 
 args = parser.parse_args()
-assert args.command == 'train' or args.command == 'test' or args.command == 'export'
+assert args.command == 'train' or args.command == 'eval' or args.command == 'test' or args.command == 'export'
 
 if __name__ == '__main__':
 
     if args.command == 'train':
         assert args.train_dir is not None and args.train_ann is not None
 
-        # Transform
+        # Transform for training
         transform = A.Compose([
             A.RandomScale(scale_limit=0.5, interpolation=cv2.INTER_LINEAR, p=0.5),
             A.transforms.PadIfNeeded(min_width=args.input_width, min_height=args.input_height, border_mode=cv2.BORDER_CONSTANT, value=0),
@@ -139,7 +139,7 @@ if __name__ == '__main__':
 
     else:
 
-        # Load model for test or export
+        # Load model for eval or test or export
         print("Loading model")
         model = LitCondInst(mode='inference', num_classes=args.num_classes, topk=args.topk)
         model.load_state_dict(torch.load(args.load_model))
@@ -147,7 +147,38 @@ if __name__ == '__main__':
             # Needs CUDA to support FP16
             model.half().to('cuda')
 
-        if args.command == 'test':
+        if args.command == 'eval':
+            assert args.val_dir is not None and args.val_ann is not None
+
+            # Transform for eval
+            transform = A.Compose([
+                A.LongestMaxSize(max_size=args.input_width, interpolation=cv2.INTER_LINEAR),
+                A.transforms.PadIfNeeded(min_width=args.input_width, min_height=args.input_height, border_mode=cv2.BORDER_CONSTANT, value=0),
+                A.CenterCrop(width=args.input_width, height=args.input_height),
+                A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                ToTensorV2(),
+            ])
+
+            root_dir_val = os.path.expanduser(args.val_dir)
+            ann_path_val = os.path.expanduser(args.val_ann)
+            dataset_val = CocoSegmentationAlb(root=root_dir_val, annFile=ann_path_val, transform=transform)
+            coco_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=lambda x: x, num_workers=args.num_workers)
+
+            # Mixed precision
+            if args.mixed_precision:
+                precision = 16
+            else:
+                precision = 32
+
+            # Evaluate model
+            trainer = pl.Trainer(
+                max_epochs=1,
+                gpus=args.gpus,
+                precision=precision
+            )
+            results = trainer.test(model, coco_val, ckpt_path=None)
+
+        elif args.command == 'test':
 
             # Get list of image paths
             image_paths = glob.glob(os.path.join(args.test_image_dir, '*.jpg'))
