@@ -199,7 +199,7 @@ class CondInst(nn.Module):
             num_batch, num_objects, _ = points.shape
             masks = []
             for i in range(num_batch):
-                mask = self.generate_mask(ctr_logits[i], mask_logits[i], points[0])
+                mask = self.generate_mask(ctr_logits[i], mask_logits[i], points[i])
                 masks.append(mask)
             masks = torch.stack(masks, dim=0)
             return labels, preds, masks
