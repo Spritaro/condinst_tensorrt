@@ -95,8 +95,8 @@ class LitCondInst(pl.LightningModule):
         for i in range(num_batch):
             # Draw peak
             topk = 10
-            labels, preds, points = get_heatmap_peaks(cls_logits[i:i+1], topk=topk)
-            num_objects, = preds[preds > 0.1].shape
+            labels, scores, points = get_heatmap_peaks(cls_logits[i:i+1], topk=topk)
+            num_objects, = scores[scores > 0.1].shape
             for no_obj in range(num_objects):
                 heatmaps[i,0,points[0,no_obj,1],points[0,no_obj,0]] = 0
 

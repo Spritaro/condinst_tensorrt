@@ -78,9 +78,9 @@ def get_heatmap_peaks(cls_logits, topk=100, kernel=3):
         topk: Int
         kernel: Int
     Returns:
-        keep_labels: Tensor[num_batch, topk]
-        keep_cls_preds: Tensor[num_batch, topk]
-        keep_points: Tensor[num_batch, topk, (x, y)]
+        labels: Tensor[num_batch, topk]
+        cls_preds: Tensor[num_batch, topk]
+        points: Tensor[num_batch, topk, (x, y)]
     """
     num_batch, num_classes, height, width = cls_logits.shape
     device = cls_logits.device
@@ -195,14 +195,14 @@ class CondInst(nn.Module):
         if self.mode == 'training':
             return cls_logits, ctr_logits, mask_logits
         else:
-            labels, preds, points = get_heatmap_peaks(cls_logits, topk=self.topk)
+            labels, scores, points = get_heatmap_peaks(cls_logits, topk=self.topk)
             num_batch, num_objects, _ = points.shape
             masks = []
             for i in range(num_batch):
                 mask = self.generate_mask(ctr_logits[i], mask_logits[i], points[i])
                 masks.append(mask)
             masks = torch.stack(masks, dim=0)
-            return labels, preds, masks
+            return labels, scores, masks
 
     def generate_mask(self, ctr_logits, mask_logits, centroids):
         """
