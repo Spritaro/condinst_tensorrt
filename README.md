@@ -56,9 +56,26 @@ In the original paper, FCOS is used for object detection, but in this implementa
     $ tensorboard --logdir=runs
     ```
 
+### Evaluation
+
+- Evaluate model
+    ```sh
+    $ python3 main.py eval \
+        --val_dir <path/to/validation/image/directory> \
+        --val_ann <path/to/validation/annotation/file> \
+        --num_classes 80 \
+        --input_width 640 \
+        --input_height 480 \
+        --batch_size 8 \
+        --num_workers 4 \
+        --mixed_precision True \
+        --gpus 1 \
+        --load_model <path/to/model.pt>
+    ```
+
 ### Test
 
-- Test with image files.
+- Perform inference and visualize results.
     ```sh
     python3 main.py test \
         --num_classes 80 \
