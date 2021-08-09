@@ -99,15 +99,16 @@ class MeanAveragePrecision(object):
             self.num_gts[gt_label] += 1
 
     def calc_map(self):
-        # For each cateogry...
-        aps_per_category = []
-        for category_i, (ious, num_gt) in enumerate(zip(self.ious, self.num_gts)):
-            # Sort IoUs by score
-            ious = sorted(ious, key=lambda k: k['score'], reverse=True)
+        # For each IoU level...
+        aps_per_iou_threshold = []
+        for iou_threshold in self.iou_thresholds:
 
-            # For each IoU level...
-            aps_per_iou_threshold = []
-            for iou_threshold in self.iou_thresholds:
+            # For each cateogry...
+            aps_per_category = []
+            for category_i, (ious, num_gt) in enumerate(zip(self.ious, self.num_gts)):
+                # Sort IoUs by score
+                ious = sorted(ious, key=lambda k: k['score'], reverse=True)
+
                 # Calculate precisions and recalls
                 tp = 0
                 fp = 0
@@ -147,17 +148,15 @@ class MeanAveragePrecision(object):
 
                 # Calculate average precision
                 ap = sum(interplated_precisions) / len(self.recall_thresholds)
-                print("category {} AP IoU=.{} {}".format(category_i, iou_threshold, ap))
-                aps_per_iou_threshold.append(ap)
+                print("category {} IoU=.{} AP {}".format(category_i, iou_threshold, ap))
+                aps_per_category.append(ap)
 
             # Calculate mAP for each category
-            if len(aps_per_iou_threshold) > 0:
-                map = sum(aps_per_iou_threshold) / len(aps_per_iou_threshold)
-            else:
-                map = 0.0
-            aps_per_category.append(map)
+            map = sum(aps_per_category) / len(aps_per_category)
+            print("IoU=.{} mAP {}".format(iou_threshold, map))
+            aps_per_iou_threshold.append(map)
 
-        # Calculate mAP for multiple categories
-        map = sum(aps_per_category) / len(aps_per_category)
+        # Calculate mAP
+        map = sum(aps_per_iou_threshold) / len(aps_per_iou_threshold)
 
         print("AP@[.50:.05:.95] {}".format(map))
