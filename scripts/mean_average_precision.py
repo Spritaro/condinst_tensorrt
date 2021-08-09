@@ -58,9 +58,6 @@ def calc_mask_ious(labels, scores, masks, targets, score_threshold):
 
                 # print("batch_i {} pred_i {} gt_i {} score {} iou {}".format(batch_i, pred_i, gt_i, scores[batch_i, pred_i], iou))
 
-                if iou < 0.5:
-                    continue
-
                 matched_gt_i.append(gt_i)
                 matched_gt_labels.append(gt_labels[gt_i])
                 matched_scores.append(scores[batch_i, pred_i])
@@ -124,7 +121,7 @@ class MeanAveragePrecision(object):
                     precisions.append(precision)
                     recalls.append(recall)
 
-                    # print("TP FP {} {}".format(tp, fp))
+                    # print("TP FP ALL {} {} {}".format(tp, fp, num_gt))
 
                 # Calculate interpolated precisions
                 interplated_precisions = []
