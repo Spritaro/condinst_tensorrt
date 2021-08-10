@@ -132,9 +132,9 @@ class MeanAveragePrecision(object):
                     while recall <= self.recall_thresholds[recall_i] / 100.0:
                         # print("recall_i {} max_precision {} recall {} threshold {}".format(recall_i, max_precision, recall, self.recall_thresholds[recall_i]/100.0))
                         interplated_precisions.append(max_precision)
-                        recall_i -= 1
-                        if recall_i < 0:
+                        if recall_i <= 0:
                             break
+                        recall_i -= 1
 
                     if precision > max_precision:
                         max_precision = precision
