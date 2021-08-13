@@ -39,7 +39,7 @@ def get_centroid_indices(masks):
 def generate_heatmap(gt_labels, gt_masks, num_classes, sigma=1.0):
     """
     Params:
-        gt_labels: Tensor[num_batch]
+        gt_labels: Tensor[num_objects]
         gt_masks: Tensor[num_objects, height, width]
         num_classes:
         sigma: standard deviation for gaussian distribution
