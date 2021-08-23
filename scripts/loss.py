@@ -1,6 +1,6 @@
 import torch
 
-def heatmap_focal_loss(preds, gt_heatmap, alpha, gamma, eps=1e-6):
+def heatmap_focal_loss(preds, gt_heatmap, alpha, gamma, eps=1e-3):
     """
     Params:
         preds: Tensor[num_classes, height, width]
@@ -15,7 +15,7 @@ def heatmap_focal_loss(preds, gt_heatmap, alpha, gamma, eps=1e-6):
     loss = -torch.where(
         gt_heatmap == 1,
         (1 - preds)**alpha * torch.log(preds + eps), # Loss for positive locations
-        (1 - gt_heatmap) ** gamma * (preds)**alpha * torch.log(1 - preds + eps) # loss for negative locations
+        (1 - gt_heatmap) ** gamma * (preds)**alpha * torch.log(1 - preds - eps) # loss for negative locations
     ).sum()
     return loss
 
