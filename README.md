@@ -45,7 +45,7 @@ In the original paper, FCOS is used for object detection, but in this implementa
         --mixed_precision True \
         --max_epochs 10 \
         --gpus 1 \
-        --learning_rate 1e-4 \
+        --learning_rate 0.01 \
         --save_model <path/to/model.pt>
     ```
     - You might need to increase shared memory size for docker container in order to increase ```num_workers``` or ```input_width``` or ```input_height```.

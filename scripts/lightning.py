@@ -83,8 +83,8 @@ class LitCondInst(pl.LightningModule):
         return map
 
     def configure_optimizers(self):
-        # optimizer = torch.optim.Adam(self.parameters(), lr=5e-4)
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, eps=1e-3)
+        # optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, eps=1e-3)
+        optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0.9, weight_decay=0.0001)
         return optimizer
 
     def concat_images_and_heatmaps(self, images, cls_logits, ctr_logits, mask_logits):
