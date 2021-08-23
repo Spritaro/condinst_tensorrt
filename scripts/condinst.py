@@ -171,10 +171,28 @@ class CondInst(nn.Module):
             nn.Conv2d(in_channels=128, out_channels=self.num_filters, kernel_size=1, padding=0)
         )
 
-        # Initialize weight and bias for class head
-        nn.init.xavier_uniform_(self.cls_head[-1].weight)
-        prior_prob = 0.01
-        bias = -math.log((1 - prior_prob) / prior_prob)
+        # Initialize
+        def initialize_upsample(m):
+            if isinstance(m, nn.Conv2d):
+                nn.init.normal_(m.weight, std=0.01)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.ConvTranspose2d):
+                nn.init.normal_(m.weight, std=0.01)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+        self.upsample.apply(initialize_upsample)
+        self.cls_head.apply(initialize_upsample)
+        self.ctr_head.apply(initialize_upsample)
+        self.mask_head.apply(initialize_upsample)
+
+        # Initialize last layer of class head
+        # NOTE: see Focal Loss paper for detail https://arxiv.org/abs/1708.02002
+        pi = 0.01
+        bias = -math.log((1 - pi) / pi)
         nn.init.constant_(self.cls_head[-1].bias, bias)
 
     def forward(self, images):
