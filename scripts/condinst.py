@@ -123,49 +123,40 @@ class CondInst(nn.Module):
         # self.backbone = resnet_fpn_backbone('resnet50', pretrained=True, trainable_layers=5)
         self.backbone = resnet_fpn_backbone('resnet34', pretrained=True, trainable_layers=5)
 
+        self.upsample = nn.Sequential(
+            nn.Conv2d(in_channels=512, out_channels=256, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(num_features=256),
+            nn.ReLU(),
+            nn.ConvTranspose2d(in_channels=256, out_channels=256, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(num_features=256),
+            nn.ReLU(),
+        )
+
         self.cls_head = nn.Sequential(
-            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=256),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=256),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=256),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(num_features=256),
             nn.ReLU(),
             nn.Conv2d(in_channels=256, out_channels=num_classes, kernel_size=1, padding=0)
         )
 
         self.ctr_head = nn.Sequential(
-            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=256),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=256),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=256),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(num_features=256),
             nn.ReLU(),
             nn.Conv2d(in_channels=256, out_channels=num_channels, kernel_size=1, padding=0)
         )
 
         self.mask_head = nn.Sequential(
-            nn.Conv2d(in_channels=256, out_channels=128, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=256, out_channels=128, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(num_features=128),
             nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(num_features=128),
             nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(num_features=128),
             nn.ReLU(),
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(num_features=128),
             nn.ReLU(),
             nn.Conv2d(in_channels=128, out_channels=self.num_filters, kernel_size=1, padding=0)
@@ -198,16 +189,20 @@ class CondInst(nn.Module):
     def forward(self, images):
         images = images.to(dtype=torch.float16)
 
-        features = self.backbone(images)
-        p2, p3, p4, p5, p6 = list(features.values())
+        # features = self.backbone(images)
+        features = self.backbone.body(images)
+        c2, c3, c4, c5 = list(features.values())
+        features = self.backbone.fpn(features)
+        p2, p3, p4, p5, _ = list(features.values())
 
-        x = p2 + (
-            F.interpolate(p3, scale_factor=2, mode='bilinear', align_corners=False) +
-            F.interpolate(p4, scale_factor=4, mode='bilinear', align_corners=False) +
-            F.interpolate(p5, scale_factor=8, mode='bilinear', align_corners=False))
+        x = self.upsample(c5)
+        cls_logits = self.cls_head(x) # [num_batch, num_classes, feature_height, feature_width]
+        ctr_logits = self.ctr_head(x) # [num_batch, num_channels, feature_height, feature_width]
 
-        cls_logits = self.cls_head(p4) # [num_batch, num_classes, feature_height, feature_width]
-        ctr_logits = self.ctr_head(p4) # [num_batch, num_channels, feature_height, feature_width]
+        # x = p3 + (
+        #     F.interpolate(p4, scale_factor=2, mode='bilinear', align_corners=False) +
+        #     F.interpolate(p5, scale_factor=4, mode='bilinear', align_corners=False))
+        x = p3
         mask_logits = self.mask_head(x) # [num_batch, num_filters, mask_height, mask_width]
 
         if self.mode == 'training':
