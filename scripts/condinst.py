@@ -342,11 +342,13 @@ class CondInst(nn.Module):
 
             heatmap_loss = heatmap_focal_loss(cls_logits[i].sigmoid(), gt_heatmap, alpha=2, gamma=4) / num_objects
 
-            gt_masks_size_mask = F.interpolate(gt_masks[None,...], size=(mask_height, mask_width)) # Tensor[1, num_objects, mask_height, mask_width]
-            # mask_loss = dice_loss(masks, gt_masks_size_mask) / num_objects
+            # gt_masks_size_mask = F.interpolate(gt_masks[None,...], size=(mask_height, mask_width)) # Tensor[1, num_objects, mask_height, mask_width]
+            _, input_height, input_width = gt_masks.shape
+            masks_input_size = F.interpolate(masks[None,...], size=(input_height, input_width), mode='bilinear', align_corners=False) # Tensor[1, num_objects, mask_height, mask_width]
             mask_loss = 0.0
             for obj_i in range(num_objects):
-                mask_loss += dice_loss(masks[obj_i,:,:], gt_masks_size_mask[:,obj_i,:,:])
+                # mask_loss += dice_loss(masks[obj_i,:,:], gt_masks_size_mask[:,obj_i,:,:])
+                mask_loss += dice_loss(masks_input_size[:,obj_i,:,:], gt_masks[obj_i,:,:])
             mask_loss /= num_objects
 
             heatmap_losses.append(heatmap_loss)
