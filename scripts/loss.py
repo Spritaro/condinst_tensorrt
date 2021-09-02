@@ -31,7 +31,7 @@ def dice_loss(inputs, targets, smooth=1.0):
     inputs = inputs.view(-1)
     targets = targets.view(-1)
 
-    intersection = (inputs * targets).sum()
-    dice = (2.*intersection + smooth)/(inputs.sum() + targets.sum() + smooth)
+    # Squred denominator version of Dice loss
+    dice = (2 * (inputs*targets).sum() + smooth) / ((inputs**2).sum() + (targets**2).sum() + smooth)
 
     return 1 - dice
