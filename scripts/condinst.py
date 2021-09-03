@@ -11,7 +11,8 @@ import torchvision
 from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
 from torchvision.ops.focal_loss import sigmoid_focal_loss
 
-from coco_category_id import category_id_to_label
+from loss import heatmap_focal_loss
+from loss import dice_loss
 
 def get_centroid_indices(masks):
     """
@@ -21,10 +22,11 @@ def get_centroid_indices(masks):
         centroids: Tensor[num_objects, (x, y)]
     """
     _, height, width = masks.shape
+    dtype = masks.dtype
     device = masks.device
 
-    location_x = torch.arange(0, width, 1, dtype=torch.float32, device=device) # Tensor[width]
-    location_y = torch.arange(0, height, 1, dtype=torch.float32, device=device) # Tensor[height]
+    location_x = torch.arange(0, width, 1, dtype=dtype, device=device) # Tensor[width]
+    location_y = torch.arange(0, height, 1, dtype=dtype, device=device) # Tensor[height]
 
     total_area = masks.sum(dim=(1,2)) + 1e-9
     centroids_x = torch.sum(masks.sum(dim=1) * location_x[None,:], dim=1) / total_area # Tensor[num_objects]
@@ -37,24 +39,25 @@ def get_centroid_indices(masks):
 def generate_heatmap(gt_labels, gt_masks, num_classes, sigma=1.0):
     """
     Params:
-        gt_labels: Tensor[num_batch]
+        gt_labels: Tensor[num_objects]
         gt_masks: Tensor[num_objects, height, width]
-        num_classes: int
-        sigma: float standard deviation for gaussian distribution
+        num_classes:
+        sigma: standard deviation for gaussian distribution
     Returns:
         heatmap: Tensor[num_classes, height, width]
         centroids: Tensor[num_objects, (x, y)]
     """
     num_objects, height, width = gt_masks.shape
+    dtype = gt_masks.dtype
     device = gt_masks.device
 
     centroids = get_centroid_indices(gt_masks) # Tensor[num_objects, (x, y)]
 
-    location_x = torch.arange(0, width, 1, dtype=torch.float32, device=device) # Tensor[width]
-    location_y = torch.arange(0, height, 1, dtype=torch.float32, device=device) # Tensor[height]
+    location_x = torch.arange(0, width, 1, dtype=dtype, device=device) # Tensor[width]
+    location_y = torch.arange(0, height, 1, dtype=dtype, device=device) # Tensor[height]
     location_y, location_x = torch.meshgrid(location_y, location_x) # [height, width], [height, width]
 
-    heatmap = torch.zeros(size=(num_classes, height, width), dtype=torch.float32, device=device)
+    heatmap = torch.zeros(size=(num_classes, height, width), dtype=dtype, device=device)
 
     for i in range(num_objects):
         label = gt_labels[i]
@@ -68,24 +71,6 @@ def generate_heatmap(gt_labels, gt_masks, num_classes, sigma=1.0):
 
     return heatmap, centroids
 
-def heatmap_focal_loss(preds, gt_heatmap, alpha, gamma):
-    """
-    Params:
-        preds: Tensor[num_classes, height, width]
-        gt_heatmap: Tensor[num_classes, height, width]
-        alpha:
-        gamma: how much you want to reduce penalty around the ground truth locations
-    Returns:
-        loss: Tensor[]
-    """
-    # See CornerNet paper for detail https://arxiv.org/abs/1808.01244
-    loss = -torch.where(
-        gt_heatmap == 1,
-        (1 - preds)**alpha * torch.log(preds), # Loss for positive locations
-        (1 - gt_heatmap) ** gamma * (preds)**alpha * torch.log(1 - preds) # loss for negative locations
-    ).sum()
-    return loss
-
 def get_heatmap_peaks(cls_logits, topk=100, kernel=3):
     """
     Params:
@@ -93,9 +78,9 @@ def get_heatmap_peaks(cls_logits, topk=100, kernel=3):
         topk: Int
         kernel: Int
     Returns:
-        keep_labels: Tensor[num_batch, topk]
-        keep_cls_preds: Tensor[num_batch, topk]
-        keep_points: Tensor[num_batch, topk, (x, y)]
+        labels: Tensor[num_batch, topk]
+        cls_preds: Tensor[num_batch, topk]
+        points: Tensor[num_batch, topk, (x, y)]
     """
     num_batch, num_classes, height, width = cls_logits.shape
     device = cls_logits.device
@@ -165,7 +150,7 @@ class AggNode(nn.Module):
         x = self.node(x)
         return x
 
-class CenterNet(nn.Module):
+class CondInst(nn.Module):
     def __init__(self, mode, num_classes, topk=100):
         super().__init__()
         assert mode in ['training', 'inference']
@@ -182,8 +167,9 @@ class CenterNet(nn.Module):
         num_channels = self.conv3_b
 
         # self.backbone = resnet_fpn_backbone('resnet50', pretrained=True, trainable_layers=5)
+        self.backbone = resnet_fpn_backbone('resnet34', pretrained=True, trainable_layers=5)
         # self.backbone = torchvision.models.resnet50(pretrained=True)
-        self.backbone = torchvision.models.resnet34(pretrained=True)
+        # self.backbone = torchvision.models.resnet34(pretrained=True)
         # self.backbone = torchvision.models.resnet18(pretrained=True)
 
         num_channels_c2 = 64
@@ -218,64 +204,71 @@ class CenterNet(nn.Module):
             nn.ReLU(),
             nn.Conv2d(in_channels=64, out_channels=num_channels, kernel_size=1, padding=0)
         )
+
         self.mask_head = nn.Sequential(
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=64),
+            nn.Conv2d(in_channels=256, out_channels=128, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(num_features=128),
             nn.ReLU(),
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_features=64),
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(num_features=128),
             nn.ReLU(),
-            nn.Conv2d(in_channels=64, out_channels=self.num_filters, kernel_size=1, padding=0)
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(num_features=128),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(num_features=128),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=128, out_channels=self.num_filters, kernel_size=1, padding=0)
         )
 
-        # Initialize weight and bias for class head
-        nn.init.xavier_uniform_(self.cls_head[-1].weight)
-        prior_prob = 0.01
-        bias = -math.log((1 - prior_prob) / prior_prob)
-        nn.init.constant_(self.cls_head[-1].bias, bias)
-
-        # def initialize_weights(m):
-        #     if isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
-        #         nn.init.xavier_uniform_(m.weight)
-        #         if m.bias is not None:
-        #             nn.init.constant_(m.bias, 0)
-
-        def initialize_convtranspose2d_as_4x4_bilinear(m):
-            if isinstance(m, nn.ConvTranspose2d):
-                assert(m.in_channels == m.out_channels)
-                bilinear_kernel = torch.as_tensor([
-                    [0.0625, 0.1875, 0.1875, 0.0625],
-                    [0.1875, 0.5625, 0.5625, 0.1875],
-                    [0.1875, 0.5625, 0.5625, 0.1875],
-                    [0.0625, 0.1875, 0.1875, 0.0625]
-                ], dtype=torch.float32)
-                weight = torch.zeros(size=(m.in_channels, m.out_channels, 4, 4), dtype=torch.float32)
-                for i in range(m.in_channels):
-                    weight[i,i,:,:] = bilinear_kernel
-                m.weight.data = nn.Parameter(weight)
+        # Initialize
+        def initialize(m):
+            if isinstance(m, nn.Conv2d):
+                nn.init.normal_(m.weight, std=0.01)
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
-        self.agg_block_c2_1.apply(initialize_convtranspose2d_as_4x4_bilinear)
-        self.agg_block_c2_2.apply(initialize_convtranspose2d_as_4x4_bilinear)
-        self.agg_block_c2_3.apply(initialize_convtranspose2d_as_4x4_bilinear)
-        self.agg_block_c3_1.apply(initialize_convtranspose2d_as_4x4_bilinear)
-        self.agg_block_c3_2.apply(initialize_convtranspose2d_as_4x4_bilinear)
-        self.agg_block_c4_1.apply(initialize_convtranspose2d_as_4x4_bilinear)
+            elif isinstance(m, nn.ConvTranspose2d):
+                nn.init.normal_(m.weight, std=0.01)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+        self.agg_block_c2_1.apply(initialize)
+        self.agg_block_c3_1.apply(initialize)
+        self.agg_block_c4_1.apply(initialize)
+        self.agg_block_c2_2.apply(initialize)
+        self.agg_block_c3_2.apply(initialize)
+        self.agg_block_c2_3.apply(initialize)
+        self.cls_head.apply(initialize)
+        self.ctr_head.apply(initialize)
+        self.mask_head.apply(initialize)
+
+        # Initialize last layer of class head
+        # NOTE: see Focal Loss paper for detail https://arxiv.org/abs/1708.02002
+        pi = 0.01
+        bias = -math.log((1 - pi) / pi)
+        nn.init.constant_(self.cls_head[-1].bias, bias)
 
     def forward(self, images):
-        images = images.to(dtype=torch.float32)
+        images = images.to(dtype=torch.float16)
 
         # features = self.backbone(images)
         # x = list(features.values())[0]
 
-        x = self.backbone.conv1(images)
-        x = self.backbone.bn1(x)
-        x = self.backbone.relu(x)
-        x = self.backbone.maxpool(x)
-        c2 = self.backbone.layer1(x) # 1/4
-        c3 = self.backbone.layer2(c2) # 1/8
-        c4 = self.backbone.layer3(c3) # 1/16
-        c5 = self.backbone.layer4(c4) # 1/32
+        # x = self.backbone.conv1(images)
+        # x = self.backbone.bn1(x)
+        # x = self.backbone.relu(x)
+        # x = self.backbone.maxpool(x)
+        # c2 = self.backbone.layer1(x) # 1/4
+        # c3 = self.backbone.layer2(c2) # 1/8
+        # c4 = self.backbone.layer3(c3) # 1/16
+        # c5 = self.backbone.layer4(c4) # 1/32
+
+        features = self.backbone.body(images)
+        c2, c3, c4, c5 = list(features.values())
+        features = self.backbone.fpn(features)
+        p2, p3, p4, p5, _ = list(features.values())
 
         # x = self.upsample(x) # -> 1/16 -> 1/8
 
@@ -290,19 +283,24 @@ class CenterNet(nn.Module):
 
         cls_logits = self.cls_head(x) # [num_batch, num_classes, feature_height, feature_width]
         ctr_logits = self.ctr_head(x) # [num_batch, num_channels, feature_height, feature_width]
+
+        x = p2 + (
+            F.interpolate(p3, scale_factor=2, mode='bilinear', align_corners=False) +
+            F.interpolate(p4, scale_factor=4, mode='bilinear', align_corners=False) +
+            F.interpolate(p5, scale_factor=8, mode='bilinear', align_corners=False))
         mask_logits = self.mask_head(x) # [num_batch, num_filters, mask_height, mask_width]
 
         if self.mode == 'training':
             return cls_logits, ctr_logits, mask_logits
         else:
-            labels, preds, points = get_heatmap_peaks(cls_logits, topk=self.topk)
+            labels, scores, points = get_heatmap_peaks(cls_logits, topk=self.topk)
             num_batch, num_objects, _ = points.shape
             masks = []
             for i in range(num_batch):
-                mask = self.generate_mask(ctr_logits[i], mask_logits[i], points[0])
+                mask = self.generate_mask(ctr_logits[i], mask_logits[i], points[i])
                 masks.append(mask)
             masks = torch.stack(masks, dim=0)
-            return labels, preds, masks
+            return labels, scores, masks
 
     def generate_mask(self, ctr_logits, mask_logits, centroids):
         """
@@ -316,22 +314,27 @@ class CenterNet(nn.Module):
         _, feature_height, feature_width = ctr_logits.shape
         _, mask_height, mask_width = mask_logits.shape
         num_objects, _ = centroids.shape
+        dtype = ctr_logits.dtype
         device = ctr_logits.device
 
         # Absolute coordinates
         # NOTE: TensorRT7 does not support float range operation. Use cast instead.
-        location_x = torch.arange(0, mask_width, 1, dtype=torch.int32, device=device).float() # Tensor[mask_width]
-        location_y = torch.arange(0, mask_height, 1, dtype=torch.int32, device=device).float() # Tensor[mask_height]
+        location_x = torch.arange(0, mask_width, 1, dtype=torch.int32, device=device) # Tensor[mask_width]
+        location_y = torch.arange(0, mask_height, 1, dtype=torch.int32, device=device) # Tensor[mask_height]
+        location_x = location_x.to(dtype)
+        location_y = location_y.to(dtype)
         location_y, location_x = torch.meshgrid(location_y, location_x) # Tensor[mask_height, mask_width], Tensor[mask_height, mask_width]
         location_xs = location_x[None,:,:].repeat(num_objects, 1, 1) # Tensor[num_objects, mask_height, mask_width]
         location_ys = location_y[None,:,:].repeat(num_objects, 1, 1) # Tensor[num_objects, mask_height, mask_width]
 
         # Relative coordinates
-        location_xs -= centroids[:,0].view(-1,1,1) # Tensor[num_objects, mask_height, mask_width]
-        location_ys -= centroids[:,1].view(-1,1,1) # Tensor[num_objects, mask_height, mask_width]
+        location_xs -= centroids[:, 0].view(-1, 1, 1) * (mask_width // feature_width) # Tensor[num_objects, mask_height, mask_width]
+        location_ys -= centroids[:, 1].view(-1, 1, 1) * (mask_height // feature_height) # Tensor[num_objects, mask_height, mask_width]
+        location_xs /= mask_width
+        location_ys /= mask_height
 
         # Add relative coordinates to mask features
-        mask_logits = mask_logits[None,:,:,:].repeat(num_objects,1,1,1) # Tensor[num_objects, num_filters, mask_height, mask_width]
+        mask_logits = mask_logits[None,:,:,:].expand(num_objects, self.num_filters, mask_height, mask_width) # Tensor[num_objects, num_filters, mask_height, mask_width]
         mask_logits = torch.cat([mask_logits, location_xs[:,None,:,:], location_ys[:,None,:,:]], dim=1) # Tensor[num_objects, num_filters+2, mask_height, mask_width]
 
         # Create instance-aware mask head
@@ -379,13 +382,14 @@ class CenterNet(nn.Module):
             cls_logits: Tensor[num_batch, num_classes, feature_height, feature_width]
             ctr_logits: Tensor[num_batch, num_channels, feature_height, feature_width]
             mask_logits: Tensor[num_batch, num_filters, mask_height, mask_width]
-            targets: List[List[Dict{'category_id': int, 'segmentations': Tensor[image_height, image_width]}]]
+            targets: List[List[Dict{'class_labels': int, 'segmentations': Tensor[image_height, image_width]}]]
         Returns:
             heatmap_loss: Tensor[]
             mask_loss: Tensor[]
         """
         num_batch, num_classes, feature_height, feature_width = cls_logits.shape
         num_batch, num_filters, mask_height, mask_width = mask_logits.shape
+        dtype = cls_logits.dtype
         device = cls_logits.device
 
         # Assign each GT mask to one point in feature map, then calculate loss
@@ -395,13 +399,13 @@ class CenterNet(nn.Module):
 
             # Skip if no object in targets
             if len(targets[i]) == 0:
-                heatmap_losses.append(torch.tensor(0, dtype=torch.float32, device=device))
-                mask_losses.append(torch.tensor(0, dtype=torch.float32, device=device))
+                heatmap_losses.append(torch.tensor(0, dtype=dtype, device=device))
+                mask_losses.append(torch.tensor(0, dtype=dtype, device=device))
                 continue
 
             # Convert list of dicts to Tensors
-            gt_labels = torch.as_tensor([category_id_to_label[obj['category_id']] for obj in targets[i]], dtype=torch.int64, device=device) # Tensor[num_objects]
-            gt_masks = torch.stack([torch.as_tensor(obj['segmentation'], dtype=torch.float32, device=device) for obj in targets[i]], dim=0) # Tensor[num_objects, image_height, image_width]
+            gt_labels = torch.as_tensor([obj['class_labels'] for obj in targets[i]], dtype=torch.int64, device=device) # Tensor[num_objects]
+            gt_masks = torch.stack([torch.as_tensor(obj['segmentation'], dtype=dtype, device=device) for obj in targets[i]], dim=0) # Tensor[num_objects, image_height, image_width]
 
             # Downsample GT masks
             gt_masks_size_feature = F.interpolate(gt_masks[None,...], size=(feature_height, feature_width)) # Tensor[1, num_objects, feature_height, feature_width]
@@ -418,8 +422,14 @@ class CenterNet(nn.Module):
 
             heatmap_loss = heatmap_focal_loss(cls_logits[i].sigmoid(), gt_heatmap, alpha=2, gamma=4) / num_objects
 
-            gt_masks_size_mask = F.interpolate(gt_masks[None,...], size=(mask_height, mask_width)) # Tensor[1, num_objects, mask_height, mask_width]
-            mask_loss = dice_loss(masks, gt_masks_size_mask) / num_objects
+            # gt_masks_size_mask = F.interpolate(gt_masks[None,...], size=(mask_height, mask_width)) # Tensor[1, num_objects, mask_height, mask_width]
+            _, input_height, input_width = gt_masks.shape
+            masks_input_size = F.interpolate(masks[None,...], size=(input_height, input_width), mode='bilinear', align_corners=False) # Tensor[1, num_objects, mask_height, mask_width]
+            mask_loss = 0.0
+            for obj_i in range(num_objects):
+                # mask_loss += dice_loss(masks[obj_i,:,:], gt_masks_size_mask[:,obj_i,:,:])
+                mask_loss += dice_loss(masks_input_size[:,obj_i,:,:], gt_masks[obj_i,:,:])
+            mask_loss /= num_objects
 
             heatmap_losses.append(heatmap_loss)
             mask_losses.append(mask_loss)
