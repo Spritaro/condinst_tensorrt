@@ -52,6 +52,7 @@ parser.add_argument('--save_model', type=str, default='../models/model.pt', help
 
 # Test options
 parser.add_argument('--topk', type=int, default=40, help="max number of object to detect during inference (default 40)")
+parser.add_argument('--score_threshold', type=float, default=0.3, help="score threshold for detection (default 0.3)")
 parser.add_argument('--load_model', type=str, default='../models/model.pt', help="path to load trained model (default '../models/model.py')")
 parser.add_argument('--test_image_dir', type=str, default='../test_image', help="path to test image dir (default '../test_image')")
 parser.add_argument('--test_output_dir', type=str, default='../test_output', help="path to test output dir (default '../test_output')")
@@ -101,7 +102,7 @@ if __name__ == '__main__':
         )
 
         # Create model for training
-        model = LitCondInst(mode='training', num_classes=args.num_classes, learning_rate=args.learning_rate)
+        model = LitCondInst(mode='training', num_classes=args.num_classes, learning_rate=args.learning_rate, score_threshold=args.score_threshold)
 
         # Load pretrained weights
         if args.pretrained_model:
@@ -213,8 +214,7 @@ if __name__ == '__main__':
                 masks = masks.to('cpu').detach().numpy().copy()
 
                 # Post processing
-                threshold=0.5
-                num_objects, = probs[probs > threshold].shape
+                num_objects, = probs[probs > args.score_threshold].shape
                 print("{} obects detected".format(num_objects))
 
                 if num_objects > 0:
