@@ -238,9 +238,10 @@ if __name__ == '__main__':
                     mask_visualize[:,:,1] += masks[:,:,i] * (float(i+1)%4/3)
                     mask_visualize[:,:,2] += masks[:,:,i] * (float(i+1)%2/1)
                 mask_visualize = np.clip(mask_visualize, 0, 1)
-                mask_visualize = (mask_visualize * 255).astype(np.int8)
+                mask_visualize = mask_visualize * 255
                 image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-                image_visualize = image / 2 + mask_visualize / 2
+                image_visualize = image / 4 + mask_visualize * 3 / 4
+                image_visualize = image_visualize.astype(np.int8)
 
                 # Save results
                 save_path = os.path.join(args.test_output_dir, os.path.basename(image_path))
