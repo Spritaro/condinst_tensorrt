@@ -195,7 +195,7 @@ if __name__ == '__main__':
 
                 # Preprocessing
                 image = cv2.resize(image, dsize=(args.input_width, args.input_height))
-                image_normalized = (image.astype(np.float32) / 255. - np.array([0.485, 0.456, 0.406])) / np.array([0.229, 0.224, 0.225])
+                image_normalized = (image.astype(np.float32) - np.array([0.485, 0.456, 0.406]) * 255) / (np.array([0.229, 0.224, 0.225]) * 255)
                 image_normalized = image_normalized.transpose(2, 0, 1) # HWC -> CHW
                 image_normalized = image_normalized[None,:,:,:] # CHW -> NCHW
                 image_normalized = torch.from_numpy(image_normalized).clone()
