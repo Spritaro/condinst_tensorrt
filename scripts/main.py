@@ -143,6 +143,7 @@ if __name__ == '__main__':
         print("Loading model")
         model = LitCondInst(mode='inference', num_classes=args.num_classes, topk=args.topk)
         model.load_state_dict(torch.load(args.load_model))
+        model.eval()
         if args.mixed_precision:
             # Needs CUDA to support FP16
             model.half().to('cuda')
