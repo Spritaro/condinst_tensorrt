@@ -8,8 +8,8 @@ from torch.utils.data import DataLoader, random_split
 from torch.utils.tensorboard import SummaryWriter
 
 import torchvision
-from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
-from torchvision.ops.focal_loss import sigmoid_focal_loss
+# from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
+# from torchvision.ops.focal_loss import sigmoid_focal_loss
 
 from loss import heatmap_focal_loss
 from loss import dice_loss
@@ -119,19 +119,37 @@ class CondInst(nn.Module):
         self.conv3_b = self.conv2_b + 1
         num_channels = self.conv3_b
 
-        # self.backbone = resnet_fpn_backbone('resnet50', pretrained=True, trainable_layers=5)
-        self.backbone = resnet_fpn_backbone('resnet34', pretrained=True, trainable_layers=5)
+        # self.backbone = resnet_fpn_backbone('resnet50', pretrained=True, trainable_layers=0)
+        # self.backbone = resnet_fpn_backbone('resnet34', pretrained=True, trainable_layers=5)
+        self.backbone = torchvision.models.resnet50(pretrained=True)
 
-        self.upsample = nn.Sequential(
-            nn.Conv2d(in_channels=512, out_channels=256, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(num_features=256),
-            nn.ReLU(),
-            nn.ConvTranspose2d(in_channels=256, out_channels=256, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(num_features=256),
-            nn.ReLU(),
+        self.lateral_conv2 = nn.Sequential(
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=1, padding=0, bias=False),
+            nn.BatchNorm2d(num_features=256)
+        )
+        self.lateral_conv3 = nn.Sequential(
+            nn.Conv2d(in_channels=512, out_channels=256, kernel_size=1, padding=0, bias=False),
+            nn.BatchNorm2d(num_features=256)
+        )
+        self.lateral_conv4 = nn.Sequential(
+            nn.Conv2d(in_channels=1024, out_channels=256, kernel_size=1, padding=0, bias=False),
+            nn.BatchNorm2d(num_features=256)
+        )
+        self.lateral_conv5 = nn.Sequential(
+            nn.Conv2d(in_channels=2048, out_channels=256, kernel_size=1, padding=0, bias=False),
+            nn.BatchNorm2d(num_features=256)
         )
 
         self.cls_head = nn.Sequential(
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(num_features=256),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(num_features=256),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(num_features=256),
+            nn.ReLU(),
             nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(num_features=256),
             nn.ReLU(),
@@ -139,6 +157,15 @@ class CondInst(nn.Module):
         )
 
         self.ctr_head = nn.Sequential(
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(num_features=256),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(num_features=256),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(num_features=256),
+            nn.ReLU(),
             nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(num_features=256),
             nn.ReLU(),
@@ -162,7 +189,7 @@ class CondInst(nn.Module):
         )
 
         # Initialize
-        def initialize_upsample(m):
+        def initialize(m):
             if isinstance(m, nn.Conv2d):
                 nn.init.normal_(m.weight, std=0.01)
                 if m.bias is not None:
@@ -174,10 +201,13 @@ class CondInst(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
-        self.upsample.apply(initialize_upsample)
-        self.cls_head.apply(initialize_upsample)
-        self.ctr_head.apply(initialize_upsample)
-        self.mask_head.apply(initialize_upsample)
+        self.lateral_conv2.apply(initialize)
+        self.lateral_conv3.apply(initialize)
+        self.lateral_conv4.apply(initialize)
+        self.lateral_conv5.apply(initialize)
+        self.cls_head.apply(initialize)
+        self.ctr_head.apply(initialize)
+        self.mask_head.apply(initialize)
 
         # Initialize last layer of class head
         # NOTE: see Focal Loss paper for detail https://arxiv.org/abs/1708.02002
@@ -189,20 +219,27 @@ class CondInst(nn.Module):
         # Convert input images to FP32 or FP16 depending on backbone dtype
         images = images.to(dtype=self.backbone.conv1.weight.dtype)
 
-        # features = self.backbone(images)
-        features = self.backbone.body(images)
-        c2, c3, c4, c5 = list(features.values())
-        features = self.backbone.fpn(features)
-        p2, p3, p4, p5, _ = list(features.values())
+        # Backbone
+        x = self.backbone.conv1(images)
+        x = self.backbone.bn1(x)
+        x = self.backbone.relu(x)
+        x = self.backbone.maxpool(x)
+        c2 = self.backbone.layer1(x)  # 1/4
+        c3 = self.backbone.layer2(c2)  # 1/8
+        c4 = self.backbone.layer3(c3)  # 1/16
+        c5 = self.backbone.layer4(c4)  # 1/32
 
-        x = self.upsample(c5)
+        # FPN
+        p5 = self.lateral_conv5(c5)
+        p4 = self.lateral_conv4(c4) + F.interpolate(p5, scale_factor=2, mode='bilinear', align_corners=False)
+        p3 = self.lateral_conv3(c3) + F.interpolate(p4, scale_factor=2, mode='bilinear', align_corners=False)
+        p2 = self.lateral_conv2(c2) + F.interpolate(p3, scale_factor=2, mode='bilinear', align_corners=False)
+
+        x = p3
         cls_logits = self.cls_head(x) # [num_batch, num_classes, feature_height, feature_width]
         ctr_logits = self.ctr_head(x) # [num_batch, num_channels, feature_height, feature_width]
 
-        # x = p3 + (
-        #     F.interpolate(p4, scale_factor=2, mode='bilinear', align_corners=False) +
-        #     F.interpolate(p5, scale_factor=4, mode='bilinear', align_corners=False))
-        x = p3
+        x = p2
         mask_logits = self.mask_head(x) # [num_batch, num_filters, mask_height, mask_width]
 
         if self.mode == 'training':
