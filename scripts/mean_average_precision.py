@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 
-def calc_mask_ious(labels, scores, masks, targets, score_threshold):
+def calc_mask_ious(labels, scores, masks, targets, score_threshold, mask_threshold=0.5):
     """
     Params:
         labels: Tensor[num_batch, topk]
@@ -9,6 +9,7 @@ def calc_mask_ious(labels, scores, masks, targets, score_threshold):
         masks: Tensor[num_batch, topk, mask_height, mask_width]
         targets: List[List[Dict{'class_labels': int, 'segmentations': Tensor[image_height, image_width]}]]
         score_threshold: Float
+        mask_threshold: Float
     Returns:
         matched_gt_labels: List[Tensor[]]
         matched_scores: List[Tensor[]]
@@ -18,6 +19,8 @@ def calc_mask_ious(labels, scores, masks, targets, score_threshold):
     _, _, mask_height, mask_width = masks.shape
     dtype = scores.dtype
     device = scores.device
+
+    masks = (masks > mask_threshold).to(dtype=masks.dtype)
 
     matched_gt_labels = []
     matched_scores = []
@@ -43,6 +46,9 @@ def calc_mask_ious(labels, scores, masks, targets, score_threshold):
             if scores[batch_i, pred_i] < score_threshold:
                 break
 
+            # Assing detected object to GT object
+            max_iou = 0.0
+            max_iou_gt_i = None
             for gt_i in range(num_objects):
 
                 if gt_i in matched_gt_i:
@@ -56,13 +62,17 @@ def calc_mask_ious(labels, scores, masks, targets, score_threshold):
                 eps = 1e-6
                 iou = inter / (union + eps)
 
+                if iou > max_iou:
+                    max_iou = iou
+                    max_iou_gt_i = gt_i
+
                 # print("batch_i {} pred_i {} gt_i {} score {} iou {}".format(batch_i, pred_i, gt_i, scores[batch_i, pred_i], iou))
 
-                matched_gt_i.append(gt_i)
-                matched_gt_labels.append(gt_labels[gt_i])
+            if max_iou_gt_i is not None:
+                matched_gt_i.append(max_iou_gt_i)
+                matched_gt_labels.append(gt_labels[max_iou_gt_i])
                 matched_scores.append(scores[batch_i, pred_i])
-                matched_ious.append(iou)
-                break
+                matched_ious.append(max_iou)
 
         # print("batch {} GT {} detected {}".format(batch_i, num_objects, len(matched_gt_i)))
 
@@ -75,10 +85,12 @@ class MeanAveragePrecision(object):
         self.iou_thresholds = list(range(50, 95, 5)) # AP@[.50:.05:.95] 10 IoU level
         self.recall_thresholds = list(range(0, 101, 1)) # 101 point interpolation
         self.score_threshold = score_threshold
+        return
 
     def reset(self, num_classes):
         self.ious = [[] for i in range(num_classes)]
         self.num_gts = [0 for i in range(num_classes)]
+        return
 
     def update(self, labels, scores, masks, targets):
         """
@@ -93,7 +105,13 @@ class MeanAveragePrecision(object):
         gt_labels, scores, ious = calc_mask_ious(labels, scores, masks, targets, score_threshold=self.score_threshold)
         for gt_label, score, iou in zip(gt_labels, scores, ious):
             self.ious[gt_label].append({'score': score, 'iou': iou})
-            self.num_gts[gt_label] += 1
+
+        # Count GTs
+        for target in targets:
+            gt_labels = torch.as_tensor([obj['class_labels'] for obj in target], dtype=torch.int64)
+            for gt_label in gt_labels:
+                self.num_gts[gt_label] += 1
+        return
 
     def calc_map(self):
         # For each IoU level...
@@ -157,3 +175,4 @@ class MeanAveragePrecision(object):
         map = sum(aps_per_iou_threshold) / len(aps_per_iou_threshold)
 
         print("AP@[.50:.05:.95] {}".format(map))
+        return
