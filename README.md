@@ -15,7 +15,13 @@ In the original paper, FCOS is used for object detection, but in this implementa
 - To build docker image with TensorRT, run the following command instead.
     ```sh
     $ cd docker
-    $ docker build -t condinst_tensorrt -f Dockerfile.trt .
+    $ docker build -t condinst_tensorrt -f Dockerfile.tensorrt .
+    ```
+
+- To build docker image for Jetson, run the following command instead.
+    ```sh
+    $ cd docker
+    $ docker build -t condinst_tensorrt -f Dockerfile.jetson .
     ```
 
 ## Usage
@@ -24,6 +30,12 @@ In the original paper, FCOS is used for object detection, but in this implementa
     ```sh
     $ cd docker
     $ ./run.sh <path/to/this/repository> <path/to/dataset/directory>
+    ```
+
+- To run docker container on Jetson, run the following command instead.
+    ```sh
+    $ cd docker
+    $ ./run_jetson.sh <path/to/this/repository> <path/to/dataset/directory>
     ```
 
 ### Train
