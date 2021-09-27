@@ -1,9 +1,13 @@
+import argparse
 import cv2
+import glob
 import numpy as np
+import os.path
+import time
+
 import pycuda.autoinit
 import pycuda.driver as cuda
 import tensorrt as trt
-import time
 
 class CondInst(object):
 
@@ -65,23 +69,27 @@ class CondInst(object):
         t1 = time.time()
         return probs, labels, masks, t1 - t0
 
-#
-# M A I N
+parser = argparse.ArgumentParser(description="Parameters for TensorRT demo")
+parser.add_argument('--test_image_dir', type=str, default='../test_image', help="path to test image dir (default '../test_image')")
+parser.add_argument('--test_output_dir', type=str, default='../test_output', help="path to test output dir (default '../test_output')")
+parser.add_argument('--load_engine', type=str, default='../models/model.engine', help="path to trained model (default '../models/model.py')")
+args = parser.parse_args()
+
 if __name__ == '__main__':
 
     # Load TensorRT engine
-    model_filename = "../models/model.engine"
-    condinst = CondInst(model_filename)
+    condinst = CondInst(args.load_engine)
 
-    image_filenames = [
-        "../test_image/000000000885.jpg",
-    ]
+    # Get list of image paths
+    image_paths = glob.glob(os.path.join(args.test_image_dir, '*.jpg'))
+    image_paths += glob.glob(os.path.join(args.test_image_dir, '*.jpeg'))
+    image_paths += glob.glob(os.path.join(args.test_image_dir, '*.png'))
 
-    for filename in image_filenames:
+    for image_path in image_paths:
 
         # Load test images
-        print("Loading {}".format(filename))
-        image = cv2.imread(filename)
+        print("Loading {}".format(image_path))
+        image = cv2.imread(image_path)
 
         # Preprocessing
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -125,4 +133,9 @@ if __name__ == '__main__':
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         image_visualize = image / 4 + mask_visualize * 3 / 4
         mask_visualize = mask_visualize.astype(np.int8)
-        cv2.imwrite("{}_result.jpg".format(filename), image_visualize)
+
+        # Save results
+        save_path = os.path.join(args.test_output_dir, os.path.basename(image_path))
+        print("Saving to {}".format(save_path))
+        os.makedirs(args.test_output_dir, exist_ok=True)
+        cv2.imwrite(save_path, image_visualize)

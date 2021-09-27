@@ -92,9 +92,9 @@ In the original paper, FCOS is used for object detection, but in this implementa
     python3 main.py test \
         --num_classes 80 \
         --topk 40 \ # Max number of detection
-        --load_model <path/to/model.pt> \
         --test_image_dir <path/to/image/directory> \
-        --test_output_dir <path/to/output/directory>
+        --test_output_dir <path/to/output/directory> \
+        --load_model <path/to/model.pt>
     ```
 
 ### Export
@@ -114,6 +114,14 @@ In the original paper, FCOS is used for object detection, but in this implementa
     ```sh
     $ export PATH=/usr/src/tensorrt/bin/:$PATH # Add path to TensorRT binary
     $ trtexec --fp16 --onnx=<path/to/model.onnx> --dumpProfile --saveEngine=<path/to/tensorrt.engine>
+    ```
+
+- Run TensorRT demo.
+    ```sh
+    $ python3 demo_tensorrt.py \
+        --test_image_dir <path/to/image/directory> \
+        --test_output_dir <path/to/output/directory> \
+        --load_engine <path/to/tensorrt.engine>
     ```
 
 # TODO
