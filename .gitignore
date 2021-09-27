@@ -1,5 +1,8 @@
 *.ckpt
+*.jpeg
+*.jpg
 *.onnx
+*.png
 *.pt
 *.pyc
-events.out.*
+/runs
