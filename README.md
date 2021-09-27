@@ -95,13 +95,13 @@ In the original paper, FCOS is used for object detection, but in this implementa
         --input_height 480 \
         --topk 40 \ # Max number of detection
         --load_model <path/to/model.pt> \
-        --onnx_model <path/to/model.onnx>
+        --export_onnx <path/to/model.onnx>
     ```
 
 - Build TensorRT engine on Jetson device or PC with TensorRT installed.
     ```sh
     $ export PATH=/usr/src/tensorrt/bin/:$PATH # Add path to TensorRT binary
-    $ trtexec --onnx=<path/to/model.onnx> --dumpProfile --saveEngine=<path/to/tensorrt.engine>
+    $ trtexec --fp16 --onnx=<path/to/model.onnx> --dumpProfile --saveEngine=<path/to/tensorrt.engine>
     ```
 
 # TODO

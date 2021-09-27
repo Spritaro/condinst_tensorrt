@@ -19,9 +19,9 @@ class CondInst(object):
 
         # Determine dimensions and create page-locked memory buffers
         self.h_input = cuda.pagelocked_empty(trt.volume(self.trt_context.get_binding_shape(0)), dtype=np.float32)
-        self.h_output0 = cuda.pagelocked_empty(trt.volume(self.trt_context.get_binding_shape(1)), dtype=np.float32)
+        self.h_output0 = cuda.pagelocked_empty(trt.volume(self.trt_context.get_binding_shape(1)), dtype=np.float16)
         self.h_output1 = cuda.pagelocked_empty(trt.volume(self.trt_context.get_binding_shape(2)), dtype=np.int32)
-        self.h_output2 = cuda.pagelocked_empty(trt.volume(self.trt_context.get_binding_shape(3)), dtype=np.float32)
+        self.h_output2 = cuda.pagelocked_empty(trt.volume(self.trt_context.get_binding_shape(3)), dtype=np.float16)
 
         # Allocate device memory for inputs and outputs.
         self.d_input = cuda.mem_alloc(self.h_input.nbytes)
@@ -58,9 +58,9 @@ class CondInst(object):
         self.stream.synchronize()
 
         # Reshape
-        probs = self.h_output0.reshape(num_batch, -1)
+        probs = self.h_output0.astype(np.float32).reshape(num_batch, -1)
         labels = self.h_output1.reshape(num_batch, -1)
-        masks = self.h_output2.reshape(num_batch, -1, height//8, width//8)
+        masks = self.h_output2.astype(np.float32).reshape(num_batch, -1, height//4, width//4)
 
         t1 = time.time()
         return probs, labels, masks, t1 - t0
@@ -70,13 +70,11 @@ class CondInst(object):
 if __name__ == '__main__':
 
     # Load TensorRT engine
-    model_filename = "model.engine"
+    model_filename = "../models/model.engine"
     condinst = CondInst(model_filename)
 
     image_filenames = [
-        "images/000000041888.jpg",
-        "images/000000041990.jpg",
-        "images/000000060770.jpg",
+        "../test_image/000000000885.jpg",
     ]
 
     for filename in image_filenames:
@@ -88,7 +86,7 @@ if __name__ == '__main__':
         # Preprocessing
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image = cv2.resize(image, dsize=(640, 480))
-        image_normalized = (image.astype(np.float32) / 255. - np.array([0.485, 0.456, 0.406])) / np.array([0.229, 0.224, 0.225])
+        image_normalized = (image.astype(np.float32) - np.array([0.485, 0.456, 0.406]) * 255.) / (np.array([0.229, 0.224, 0.225]) * 255.)
         image_normalized = image_normalized.transpose(2, 0, 1) # HWC -> CHW
         image_normalized = image_normalized[None,:,:,:] # CHW -> NCHW
 
@@ -97,8 +95,8 @@ if __name__ == '__main__':
         print("Inference time {} s".format(t))
 
         # Postprocessing
-        threshold=0.5
-        num_objects, = probs[probs > threshold].shape
+        score_threshold=0.3
+        num_objects, = probs[probs > score_threshold].shape
         print("{} obects detected".format(num_objects))
 
         probs = probs[0,:num_objects]
@@ -123,6 +121,8 @@ if __name__ == '__main__':
             mask_visualize[:,:,1] += masks[:,:,i] * (float(i+1)%4/3)
             mask_visualize[:,:,2] += masks[:,:,i] * (float(i+1)%2/1)
         mask_visualize = np.clip(mask_visualize, 0, 1)
-        mask_visualize = (mask_visualize * 255).astype(np.int8)
-        image_visualize = image / 2 + mask_visualize / 2
+        mask_visualize = mask_visualize * 255
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        image_visualize = image / 4 + mask_visualize * 3 / 4
+        mask_visualize = mask_visualize.astype(np.int8)
         cv2.imwrite("{}_result.jpg".format(filename), image_visualize)

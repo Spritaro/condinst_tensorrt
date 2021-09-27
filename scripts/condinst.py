@@ -89,7 +89,7 @@ def get_heatmap_peaks(cls_logits, topk=100, kernel=3):
     heatmap_preds = cls_logits.sigmoid() # Tensor[num_batch, num_classes, height, width]
     pad = (kernel - 1) // 2
     heatmap_max = F.max_pool2d(heatmap_preds, (kernel, kernel), stride=1, padding=pad) # Tensor[num_batch, num_classes, height, width]
-    peak_map = (heatmap_max == heatmap_preds).float()
+    peak_map = (heatmap_max == heatmap_preds).to(dtype=heatmap_preds.dtype)
     peak_map = peak_map * heatmap_preds
     peak_map = peak_map.view(num_batch, -1) # Tensor[num_batch, (num_classes*height*width)]
 
@@ -187,7 +187,8 @@ class CondInst(nn.Module):
         nn.init.constant_(self.cls_head[-1].bias, bias)
 
     def forward(self, images):
-        images = images.to(dtype=torch.float16)
+        # Convert input images to FP32 or FP16 depending on backbone dtype
+        images = images.to(dtype=self.backbone.conv1.weight.dtype)
 
         # features = self.backbone(images)
         features = self.backbone.body(images)
