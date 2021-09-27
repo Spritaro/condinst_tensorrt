@@ -36,13 +36,12 @@ def get_centroid_indices(masks):
     centroids = centroids.to(torch.int64)
     return centroids
 
-def generate_heatmap(gt_labels, gt_masks, num_classes, sigma=1.0):
+def generate_heatmap(gt_labels, gt_masks, num_classes):
     """
     Params:
         gt_labels: Tensor[num_objects]
         gt_masks: Tensor[num_objects, height, width]
         num_classes:
-        sigma: standard deviation for gaussian distribution
     Returns:
         heatmap: Tensor[num_classes, height, width]
         centroids: Tensor[num_objects, (x, y)]
@@ -52,6 +51,7 @@ def generate_heatmap(gt_labels, gt_masks, num_classes, sigma=1.0):
     device = gt_masks.device
 
     centroids = get_centroid_indices(gt_masks) # Tensor[num_objects, (x, y)]
+    radius2 = torch.sum(gt_masks, dim=(1, 2)) / height / width * 10 + 1
 
     location_x = torch.arange(0, width, 1, dtype=dtype, device=device) # Tensor[width]
     location_y = torch.arange(0, height, 1, dtype=dtype, device=device) # Tensor[height]
@@ -63,9 +63,8 @@ def generate_heatmap(gt_labels, gt_masks, num_classes, sigma=1.0):
         label = gt_labels[i]
         px = centroids[i][0]
         py = centroids[i][1]
-        # sigma2 = gt_masks[i].sum() * 0.1 + 1e-9
-        # sigma2 = float(sigma2.to(torch.device('cpu')).detach().numpy())
-        single_heatmap = torch.exp(-((location_x-px)**2 + (location_y-py)**2) / (2. * sigma**2))
+        single_heatmap = torch.exp(-((location_x-px)**2 + (location_y-py)**2) / (2. * radius2[i]))
+
         # Take element-wise maximum in case of overlapping objects
         heatmap[label,:,:] = torch.maximum(heatmap[label,:,:], single_heatmap)
 
