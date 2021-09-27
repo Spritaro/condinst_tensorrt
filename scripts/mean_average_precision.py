@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 
-def calc_mask_ious(labels, scores, masks, targets, score_threshold, mask_threshold=0.5):
+def calc_mask_ious(labels, scores, masks, targets, score_threshold, mask_threshold):
     """
     Params:
         labels: Tensor[num_batch, topk]
@@ -80,11 +80,12 @@ def calc_mask_ious(labels, scores, masks, targets, score_threshold, mask_thresho
 
 class MeanAveragePrecision(object):
 
-    def __init__(self, num_classes, score_threshold):
+    def __init__(self, num_classes, score_threshold, mask_threshold):
         self.reset(num_classes)
         self.iou_thresholds = list(range(50, 95, 5)) # AP@[.50:.05:.95] 10 IoU level
         self.recall_thresholds = list(range(0, 101, 1)) # 101 point interpolation
         self.score_threshold = score_threshold
+        self.mask_threshold = mask_threshold
         return
 
     def reset(self, num_classes):
@@ -102,7 +103,8 @@ class MeanAveragePrecision(object):
         Returns:
             None
         """
-        gt_labels, scores, ious = calc_mask_ious(labels, scores, masks, targets, score_threshold=self.score_threshold)
+        gt_labels, scores, ious = calc_mask_ious(
+            labels, scores, masks, targets, score_threshold=self.score_threshold, mask_threshold=self.mask_threshold)
         for gt_label, score, iou in zip(gt_labels, scores, ious):
             self.ious[gt_label].append({'score': score, 'iou': iou})
 

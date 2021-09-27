@@ -70,7 +70,7 @@ def generate_heatmap(gt_labels, gt_masks, num_classes):
 
     return heatmap, centroids
 
-def get_heatmap_peaks(cls_logits, topk=100, kernel=3):
+def get_heatmap_peaks(cls_logits, topk, kernel=3):
     """
     Params:
         cls_logits: Tensor[num_batch, num_classes, height, width]
@@ -104,7 +104,7 @@ def get_heatmap_peaks(cls_logits, topk=100, kernel=3):
     return labels, cls_preds, points
 
 class CondInst(nn.Module):
-    def __init__(self, mode, num_classes, topk=100):
+    def __init__(self, mode, num_classes, topk):
         super().__init__()
         assert mode in ['training', 'inference']
         self.mode = mode

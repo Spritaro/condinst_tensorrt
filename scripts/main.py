@@ -28,8 +28,11 @@ parser.add_argument('--input_width', type=int, default=640, required=False, help
 parser.add_argument('--input_height', type=int, default=480, help="height of input image (default 480)")
 parser.add_argument('--num_classes', type=int, default=80, help="number of classes (default 80)")
 parser.add_argument('--topk', type=int, default=40, help="max number of object to detect during inference (default 40)")
-parser.add_argument('--score_threshold', type=float, default=0.3, help="score threshold for detection (default 0.3)")
 parser.add_argument('--mixed_precision', type=bool, default=True, help="allow FP16 training (default True)")
+
+# Post-processing options
+parser.add_argument('--score_threshold', type=float, default=0.3, help="score threshold for detection (default 0.3)")
+parser.add_argument('--mask_threshold', type=float, default=0.5, help="threshold for mask binarization (default 0.5)")
 
 # Create parser for "train" command
 parser_train = subparsers.add_parser('train', help="train model")
@@ -38,7 +41,7 @@ parser_train.add_argument('--train_dir', type=str, required=True, help="path to 
 parser_train.add_argument('--train_ann', type=str, required=True, help="path to train annotation path (required)")
 parser_train.add_argument('--val_dir', type=str, default=None, required=False, help="path to validation image dir (optional)")
 parser_train.add_argument('--val_ann', type=str, default=None, required=False, help="path to validation dataset dir (optional)")
-# Train options
+# Training options
 parser_train.add_argument('--pretrained_model', type=str, default=None, help="path to pretrained model (optional)")
 parser_train.add_argument('--batch_size', type=int, default=8, help="batch size (default 8)")
 parser_train.add_argument('--accumulate_grad_batches', type=int, default=16, help="number of gradients to accumulate (default 16)")
@@ -61,16 +64,14 @@ parser_eval.add_argument('--val_ann', type=str, required=True, help="path to val
 # Evaluation options
 parser_eval.add_argument('--batch_size', type=int, default=8, help="batch size (default 8)")
 parser_eval.add_argument('--num_workers', type=int, default=4, help="number of workers for data loader (default 4)")
-parser_eval.add_argument('--mixed_precision', type=bool, default=True, help="allow FP16 training (default True)")
 parser_eval.add_argument('--gpus', type=int, default=1, help="number of GPUs to train (0 for CPU, -1 for all GPUs) (default 1)")
 parser_eval.add_argument('--load_model', type=str, default='../models/model.pt', help="path to trained model (default '../models/model.py')")
 
 # Create parser for "test" command
 parser_test = subparsers.add_parser('test', help="test model")
-# Dataset options
+# Test options
 parser_test.add_argument('--test_image_dir', type=str, default='../test_image', help="path to test image dir (default '../test_image')")
 parser_test.add_argument('--test_output_dir', type=str, default='../test_output', help="path to test output dir (default '../test_output')")
-# Test options
 parser_test.add_argument('--load_model', type=str, default='../models/model.pt', help="path to trained model (default '../models/model.py')")
 
 # Create parser for "export" command
@@ -120,7 +121,13 @@ if __name__ == '__main__':
         )
 
         # Create model for training
-        model = LitCondInst(mode='training', num_classes=args.num_classes, learning_rate=args.learning_rate, score_threshold=args.score_threshold)
+        model = LitCondInst(
+            mode='training',
+            num_classes=args.num_classes,
+            topk=args.topk,
+            learning_rate=args.learning_rate,
+            score_threshold=args.score_threshold,
+            mask_threshold=args.mask_threshold)
 
         # Load pretrained weights
         if args.pretrained_model:
@@ -160,7 +167,12 @@ if __name__ == '__main__':
 
         # Load model for eval or test or export
         print("Loading model")
-        model = LitCondInst(mode='inference', num_classes=args.num_classes, topk=args.topk)
+        model = LitCondInst(
+            mode='inference',
+            num_classes=args.num_classes,
+            topk=args.topk,
+            score_threshold=args.score_threshold,
+            mask_threshold=args.mask_threshold)
         model.load_state_dict(torch.load(args.load_model))
         model.eval()
         if args.mixed_precision:
@@ -243,7 +255,7 @@ if __name__ == '__main__':
                 masks = masks.transpose(1, 2, 0)
                 masks = masks.astype(np.float32)
                 masks = cv2.resize(masks, dsize=(args.input_width, args.input_height), interpolation=cv2.INTER_LINEAR)
-                masks = (masks > 0.5).astype(np.float32)
+                masks = (masks > args.mask_threshold).astype(np.float32)
 
                 # Add channel dimension if removed by cv2.resize()
                 if len(masks.shape) == 2:

@@ -7,18 +7,19 @@ from condinst import CondInst, get_heatmap_peaks
 from mean_average_precision import MeanAveragePrecision
 
 class LitCondInst(pl.LightningModule):
-    def __init__(self, mode, num_classes, learning_rate=1e-4, topk=100, mask_loss_factor=1.0, score_threshold=0.3):
+    def __init__(self, mode, num_classes, topk, learning_rate=0.01, score_threshold=0.3, mask_threshold=0.5, mask_loss_factor=1.0):
         super().__init__()
+        self.topk = topk
         self.learning_rate = learning_rate
-        self.mask_loss_factor = mask_loss_factor
         self.score_threshold = score_threshold
+        self.mask_threshold = mask_threshold
+        self.mask_loss_factor = mask_loss_factor
+
         self.condinst = CondInst(mode, num_classes, topk)
 
-        # TensorBoard
-        self.mode = mode
-
         # mAP calculation
-        self.map = MeanAveragePrecision(num_classes=num_classes, score_threshold=self.score_threshold)
+        self.map = MeanAveragePrecision(
+            num_classes=num_classes, score_threshold=score_threshold, mask_threshold=mask_threshold)
 
     def forward(self, images):
         outputs = self.condinst(images)
@@ -114,13 +115,13 @@ class LitCondInst(pl.LightningModule):
 
         for i in range(num_batch):
             # Draw peak
-            topk = 10
-            labels, scores, points = get_heatmap_peaks(cls_logits[i:i+1], topk=topk)
+            labels, scores, points = get_heatmap_peaks(cls_logits[i:i+1], topk=self.topk)
             num_objects, = scores[scores > self.score_threshold].shape
             for no_obj in range(num_objects):
                 heatmaps[i,0,points[0,no_obj,1],points[0,no_obj,0]] = 0
 
             # Draw mask
+            # NOTE: In order to visualize mask learning process, thresholding is not applied
             masks = self.condinst.generate_mask(ctr_logits[i], mask_logits[i], points[0])
             for no_obj in range(num_objects):
                 maskmaps[i,0,:,:] = torch.maximum(maskmaps[i,0,:,:], masks[no_obj] * (float(no_obj+1)%8/7))
