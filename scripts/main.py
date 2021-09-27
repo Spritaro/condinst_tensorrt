@@ -21,47 +21,65 @@ from lightning import LitCondInst
 from dataset import CocoSegmentationAlb
 
 parser = argparse.ArgumentParser(description="Parameters for training and inference")
-parser.add_argument('command', type=str, help="train or test or export")
+subparsers = parser.add_subparsers(dest="command")
 
-# Dataset options
-parser.add_argument('--train_dir', type=str, default=None, help="path to train image dir (required for training)")
-parser.add_argument('--train_ann', type=str, default=None, help="path to train annotation path (required for training)")
-parser.add_argument('--val_dir', type=str, default=None, required=False, help="path to validation image dir (optional for training, required for eval)")
-parser.add_argument('--val_ann', type=str, default=None, required=False, help="path to validation dataset dir (optional for training, required for eval)")
-parser.add_argument('--num_classes', type=int, default=80, help="number of classes (default 80)")
-
-# Train options
-parser.add_argument('--pretrained_model', type=str, default=None, help="path to pretrained model (optional)")
+# Model options
 parser.add_argument('--input_width', type=int, default=640, required=False, help="width of input image (default 640)")
 parser.add_argument('--input_height', type=int, default=480, help="height of input image (default 480)")
-parser.add_argument('--batch_size', type=int, default=8, help="batch size (default 8)")
-parser.add_argument('--accumulate_grad_batches', type=int, default=16, help="number of gradients to accumulate (default 16)")
-parser.add_argument('--num_workers', type=int, default=4, help="number of workers for data loader (default 4)")
-parser.add_argument('--mixed_precision', type=bool, default=True, help="allow FP16 training (default True)")
-parser.add_argument('--resume_from_checkpoint', type=str, default=None, help="path to checkpoint file (optional)")
-parser.add_argument('--max_epochs', type=int, default=10, help="number of epochs (default 10")
-parser.add_argument('--gpus', type=int, default=1, help="number of GPUs to train (0 for CPU, -1 for all GPUs) (default 1)")
-parser.add_argument('--learning_rate', type=float, default=0.01, help="learning rate (default 0.01)")
-
-# Logging options
-parser.add_argument('--tensorboard_log_dir', type=str, default='../runs', help="path to TensorBoard log dir (default '../runs')")
-parser.add_argument('--checkpoint_dir', type=str, default='../checkpoints', help="path to checkpoint directory (default '../checkpoints')")
-
-# Output options
-parser.add_argument('--save_model', type=str, default='../models/model.pt', help="path to save trained model (defalut '../models/model.py')")
-
-# Test options
+parser.add_argument('--num_classes', type=int, default=80, help="number of classes (default 80)")
 parser.add_argument('--topk', type=int, default=40, help="max number of object to detect during inference (default 40)")
 parser.add_argument('--score_threshold', type=float, default=0.3, help="score threshold for detection (default 0.3)")
-parser.add_argument('--load_model', type=str, default='../models/model.pt', help="path to load trained model (default '../models/model.py')")
-parser.add_argument('--test_image_dir', type=str, default='../test_image', help="path to test image dir (default '../test_image')")
-parser.add_argument('--test_output_dir', type=str, default='../test_output', help="path to test output dir (default '../test_output')")
+parser.add_argument('--mixed_precision', type=bool, default=True, help="allow FP16 training (default True)")
 
+# Create parser for "train" command
+parser_train = subparsers.add_parser('train', help="train model")
+# Datset options
+parser_train.add_argument('--train_dir', type=str, required=True, help="path to train image dir (required)")
+parser_train.add_argument('--train_ann', type=str, required=True, help="path to train annotation path (required)")
+parser_train.add_argument('--val_dir', type=str, default=None, required=False, help="path to validation image dir (optional)")
+parser_train.add_argument('--val_ann', type=str, default=None, required=False, help="path to validation dataset dir (optional)")
+# Train options
+parser_train.add_argument('--pretrained_model', type=str, default=None, help="path to pretrained model (optional)")
+parser_train.add_argument('--batch_size', type=int, default=8, help="batch size (default 8)")
+parser_train.add_argument('--accumulate_grad_batches', type=int, default=16, help="number of gradients to accumulate (default 16)")
+parser_train.add_argument('--num_workers', type=int, default=4, help="number of workers for data loader (default 4)")
+parser_train.add_argument('--resume_from_checkpoint', type=str, default=None, help="path to checkpoint file (optional)")
+parser_train.add_argument('--max_epochs', type=int, default=10, help="number of epochs (default 10")
+parser_train.add_argument('--gpus', type=int, default=1, help="number of GPUs to train (0 for CPU, -1 for all GPUs) (default 1)")
+parser_train.add_argument('--learning_rate', type=float, default=0.01, help="learning rate (default 0.01)")
+# Logging options
+parser_train.add_argument('--tensorboard_log_dir', type=str, default='../runs', help="path to TensorBoard log dir (default '../runs')")
+parser_train.add_argument('--checkpoint_dir', type=str, default='../checkpoints', help="path to checkpoint directory (default '../checkpoints')")
+# Output options
+parser_train.add_argument('--save_model', type=str, default='../models/model.pt', help="path to save trained model (defalut '../models/model.py')")
+
+# Create parser for "eval" command
+parser_eval = subparsers.add_parser('eval', help="evaluate model")
+# Datset options
+parser_eval.add_argument('--val_dir', type=str, required=True, help="path to validation image dir (required)")
+parser_eval.add_argument('--val_ann', type=str, required=True, help="path to validation dataset dir (required)")
+# Evaluation options
+parser_eval.add_argument('--batch_size', type=int, default=8, help="batch size (default 8)")
+parser_eval.add_argument('--num_workers', type=int, default=4, help="number of workers for data loader (default 4)")
+parser_eval.add_argument('--mixed_precision', type=bool, default=True, help="allow FP16 training (default True)")
+parser_eval.add_argument('--gpus', type=int, default=1, help="number of GPUs to train (0 for CPU, -1 for all GPUs) (default 1)")
+parser_eval.add_argument('--load_model', type=str, default='../models/model.pt', help="path to trained model (default '../models/model.py')")
+
+# Create parser for "test" command
+parser_test = subparsers.add_parser('test', help="test model")
+# Dataset options
+parser_test.add_argument('--test_image_dir', type=str, default='../test_image', help="path to test image dir (default '../test_image')")
+parser_test.add_argument('--test_output_dir', type=str, default='../test_output', help="path to test output dir (default '../test_output')")
+# Test options
+parser_test.add_argument('--load_model', type=str, default='../models/model.pt', help="path to trained model (default '../models/model.py')")
+
+# Create parser for "export" command
+parser_export = subparsers.add_parser('export', help="export model to ONNX format")
 # Export options
-parser.add_argument('--export_onnx', type=str, default='../models/model.onnx', help="path to export onnx model (default ../models/model.onnx)")
+parser_export.add_argument('--load_model', type=str, default='../models/model.pt', help="path to trained model (default '../models/model.py')")
+parser_export.add_argument('--export_onnx', type=str, default='../models/model.onnx', help="path to export onnx model (default ../models/model.onnx)")
 
 args = parser.parse_args()
-assert args.command == 'train' or args.command == 'eval' or args.command == 'test' or args.command == 'export'
 
 if __name__ == '__main__':
 
