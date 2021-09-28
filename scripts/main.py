@@ -52,8 +52,8 @@ parser_train.add_argument('--gpus', type=int, default=1, help="number of GPUs to
 parser_train.add_argument('--learning_rate', type=float, default=0.01, help="learning rate (default 0.01)")
 # Logging options
 parser_train.add_argument('--tensorboard_log_dir', type=str, default='../runs', help="path to TensorBoard log dir (default '../runs')")
-parser_train.add_argument('--checkpoint_dir', type=str, default='../checkpoints', help="path to checkpoint directory (default '../checkpoints')")
 # Output options
+parser_train.add_argument('--checkpoint_dir', type=str, default='../checkpoints', help="path to checkpoint directory (default '../checkpoints')")
 parser_train.add_argument('--save_model', type=str, default='../models/model.pt', help="path to save trained model (defalut '../models/model.py')")
 
 # Create parser for "eval" command
@@ -66,6 +66,8 @@ parser_eval.add_argument('--batch_size', type=int, default=8, help="batch size (
 parser_eval.add_argument('--num_workers', type=int, default=4, help="number of workers for data loader (default 4)")
 parser_eval.add_argument('--gpus', type=int, default=1, help="number of GPUs to train (0 for CPU, -1 for all GPUs) (default 1)")
 parser_eval.add_argument('--load_model', type=str, default='../models/model.pt', help="path to trained model (default '../models/model.py')")
+# Logging options
+parser_eval.add_argument('--tensorboard_log_dir', type=str, default='../runs', help="path to TensorBoard log dir (default '../runs')")
 
 # Create parser for "test" command
 parser_test = subparsers.add_parser('test', help="test model")
@@ -202,11 +204,16 @@ if __name__ == '__main__':
             else:
                 precision = 32
 
+            # Logger
+            os.makedirs(args.tensorboard_log_dir, exist_ok=True)
+            tb_logger = pl_loggers.TensorBoardLogger(save_dir=args.tensorboard_log_dir, default_hp_metric=False)
+
             # Evaluate model
             trainer = pl.Trainer(
                 max_epochs=1,
                 gpus=args.gpus,
-                precision=precision
+                precision=precision,
+                logger=tb_logger
             )
             results = trainer.test(model, coco_val, ckpt_path=None)
 
