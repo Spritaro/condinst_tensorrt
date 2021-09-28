@@ -42,19 +42,21 @@ In the original paper, FCOS is used for object detection, but in this implementa
 
 - Train on COCO dataset.
     ```sh
-    $ python3 main.py train \
+    $ python3 main.py \
+        --input_width 640 \
+        --input_height 480 \
+        --num_classes 80 \
+        --topk 40 \
+        --mixed_precision True \
+        train \
         --train_dir <path/to/train/image/directory> \
         --train_ann <path/to/train/annotation/file> \
         --val_dir <path/to/validation/image/directory> \
         --val_ann <path/to/validation/annotation/file> \
-        --num_classes 80 \
         --pretrained_model <path/to/pretrained/model/if/available> \
-        --input_width 640 \
-        --input_height 480 \
         --batch_size 8 \
         --accumulate_grad_batches 16 \
         --num_workers 4 \
-        --mixed_precision True \
         --max_epochs 10 \
         --gpus 1 \
         --learning_rate 0.01 \
@@ -72,15 +74,17 @@ In the original paper, FCOS is used for object detection, but in this implementa
 
 - Evaluate model
     ```sh
-    $ python3 main.py eval \
-        --val_dir <path/to/validation/image/directory> \
-        --val_ann <path/to/validation/annotation/file> \
-        --num_classes 80 \
+    $ python3 main.py \
         --input_width 640 \
         --input_height 480 \
+        --num_classes 80 \
+        --topk 40 \
+        --mixed_precision True \
+        eval \
+        --val_dir <path/to/validation/image/directory> \
+        --val_ann <path/to/validation/annotation/file> \
         --batch_size 8 \
         --num_workers 4 \
-        --mixed_precision True \
         --gpus 1 \
         --load_model <path/to/model.pt>
     ```
@@ -89,9 +93,13 @@ In the original paper, FCOS is used for object detection, but in this implementa
 
 - Perform inference and visualize results.
     ```sh
-    python3 main.py test \
+    python3 main.py \
+        --input_width 640 \
+        --input_height 480 \
         --num_classes 80 \
         --topk 40 \ # Max number of detection
+        --mixed_precision True \
+        test \
         --test_image_dir <path/to/image/directory> \
         --test_output_dir <path/to/output/directory> \
         --load_model <path/to/model.pt>
@@ -101,11 +109,13 @@ In the original paper, FCOS is used for object detection, but in this implementa
 
 - Export ONNX model.
     ```sh
-    $ python3 main.py export \
-        --num_classes 80 \
+    $ python3 main.py \
         --input_width 640 \
         --input_height 480 \
+        --num_classes 80 \
         --topk 40 \ # Max number of detection
+        --mixed_precision True \
+        export \
         --load_model <path/to/model.pt> \
         --export_onnx <path/to/model.onnx>
     ```
