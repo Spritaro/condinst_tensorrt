@@ -119,24 +119,31 @@ class CondInst(nn.Module):
         self.conv3_b = self.conv2_b + 1
         num_channels = self.conv3_b
 
-        # self.backbone = resnet_fpn_backbone('resnet50', pretrained=True, trainable_layers=0)
         # self.backbone = resnet_fpn_backbone('resnet34', pretrained=True, trainable_layers=5)
-        self.backbone = torchvision.models.resnet50(pretrained=True)
+        # self.backbone = resnet_fpn_backbone('resnet50', pretrained=True, trainable_layers=0)
+        # self.backbone = torchvision.models.resnet50(pretrained=True)
+        mobilenet_v2 = torchvision.models.mobilenet_v2(pretrained=True)
+        features = mobilenet_v2.features
+        self.backbone = nn.ModuleList()
+        self.backbone.append(nn.Sequential(*features[0:4]))
+        self.backbone.append(nn.Sequential(*features[4:7]))
+        self.backbone.append(nn.Sequential(*features[7:11]))
+        self.backbone.append(nn.Sequential(*features[11:19]))
 
         self.lateral_conv2 = nn.Sequential(
-            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=1, padding=0, bias=False),
+            nn.Conv2d(in_channels=24, out_channels=256, kernel_size=1, padding=0, bias=False),
             nn.BatchNorm2d(num_features=256)
         )
         self.lateral_conv3 = nn.Sequential(
-            nn.Conv2d(in_channels=512, out_channels=256, kernel_size=1, padding=0, bias=False),
+            nn.Conv2d(in_channels=32, out_channels=256, kernel_size=1, padding=0, bias=False),
             nn.BatchNorm2d(num_features=256)
         )
         self.lateral_conv4 = nn.Sequential(
-            nn.Conv2d(in_channels=1024, out_channels=256, kernel_size=1, padding=0, bias=False),
+            nn.Conv2d(in_channels=64, out_channels=256, kernel_size=1, padding=0, bias=False),
             nn.BatchNorm2d(num_features=256)
         )
         self.lateral_conv5 = nn.Sequential(
-            nn.Conv2d(in_channels=2048, out_channels=256, kernel_size=1, padding=0, bias=False),
+            nn.Conv2d(in_channels=1280, out_channels=256, kernel_size=1, padding=0, bias=False),
             nn.BatchNorm2d(num_features=256)
         )
 
@@ -217,17 +224,23 @@ class CondInst(nn.Module):
 
     def forward(self, images):
         # Convert input images to FP32 or FP16 depending on backbone dtype
-        images = images.to(dtype=self.backbone.conv1.weight.dtype)
+        # images = images.to(dtype=self.backbone.conv1.weight.dtype)
+        images = images.to(dtype=torch.float16)
 
-        # Backbone
-        x = self.backbone.conv1(images)
-        x = self.backbone.bn1(x)
-        x = self.backbone.relu(x)
-        x = self.backbone.maxpool(x)
-        c2 = self.backbone.layer1(x)  # 1/4
-        c3 = self.backbone.layer2(c2)  # 1/8
-        c4 = self.backbone.layer3(c3)  # 1/16
-        c5 = self.backbone.layer4(c4)  # 1/32
+        # # Backbone
+        # x = self.backbone.conv1(images)
+        # x = self.backbone.bn1(x)
+        # x = self.backbone.relu(x)
+        # x = self.backbone.maxpool(x)
+        # c2 = self.backbone.layer1(x)  # 1/4
+        # c3 = self.backbone.layer2(c2)  # 1/8
+        # c4 = self.backbone.layer3(c3)  # 1/16
+        # c5 = self.backbone.layer4(c4)  # 1/32
+
+        c2 = self.backbone[0](images) # 24ch 1/4
+        c3 = self.backbone[1](c2) # 32ch 1/8
+        c4 = self.backbone[2](c3) # 64ch 1/16
+        c5 = self.backbone[3](c4) # 1280ch 1/32
 
         # FPN
         p5 = self.lateral_conv5(c5)
