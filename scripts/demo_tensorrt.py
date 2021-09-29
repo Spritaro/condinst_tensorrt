@@ -71,6 +71,7 @@ class CondInst(object):
 
 parser = argparse.ArgumentParser(description="Parameters for TensorRT demo")
 parser.add_argument('--test_image_dir', type=str, default='../test_image', help="path to test image dir (default '../test_image')")
+parser.add_argument('--test_depth_dir', type=str, default=None, help="path to test image dir (required only for model with input_channels=4)")
 parser.add_argument('--test_output_dir', type=str, default='../test_output', help="path to test output dir (default '../test_output')")
 parser.add_argument('--load_engine', type=str, default='../models/model.engine', help="path to trained model (default '../models/model.py')")
 args = parser.parse_args()
@@ -97,6 +98,20 @@ if __name__ == '__main__':
         image_normalized = (image.astype(np.float32) - np.array([0.485, 0.456, 0.406]) * 255.) / (np.array([0.229, 0.224, 0.225]) * 255.)
         image_normalized = image_normalized.transpose(2, 0, 1) # HWC -> CHW
         image_normalized = image_normalized[None,:,:,:] # CHW -> NCHW
+
+        # Read depth image and concatenate to image
+        if args.test_depth_dir is not None:
+            basename = os.path.basename(image_path)
+            basename = os.path.splitext(basename)[0] + '.png'
+            path = os.path.join(args.test_depth_dir, basename)
+            depth = cv2.imread(path, cv2.IMREAD_ANYDEPTH)
+            depth = depth.astype(np.float32)
+
+            _, _, h, w = image_normalized.shape
+            rgbd = np.zeros(shape=(1, 4, h, w), dtype=np.float32)
+            rgbd[0,:3,:,:] = image_normalized
+            rgbd[0,3,:,:] = depth / 1000. # mm to m
+            image_normalized = rgbd
 
         # Perform inference
         probs, labels, masks, t = condinst.infer(image_normalized)
