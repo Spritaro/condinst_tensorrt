@@ -72,7 +72,7 @@ This implementation is based on [CenterNet: Objects as Points](https://arxiv.org
 
 ### Evaluation
 
-- Evaluate model
+- Evaluate model.
     ```sh
     $ python3 main.py \
         --input_width 640 \
@@ -133,3 +133,6 @@ This implementation is based on [CenterNet: Objects as Points](https://arxiv.org
         --test_output_dir <path/to/output/directory> \
         --load_engine <path/to/tensorrt.engine>
     ```
+
+### RGB-D images
+See [Instructions for RGB-D images](docs/rgbd.md) for details.
