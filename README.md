@@ -1,7 +1,7 @@
-# Unofficial Implementation of CondInst for TensorRT
+# Simple Implementation of CondInst for TensorRT
 
-The architecture is based on [CondInst: Conditional Convolutions for Instance Segmentation](https://arxiv.org/abs/2003.05664).
-In the original paper, FCOS is used for object detection, but in this implementation, heatmap (similar to the one in [CenterNet: Objects as Points](https://arxiv.org/abs/1904.07850)) is used to make it NMS-free.
+This repository is an unofficial simplified implementation of [CondInst: Conditional Convolutions for Instance Segmentation](https://arxiv.org/abs/2003.05664).
+This implementation is based on [CenterNet: Objects as Points](https://arxiv.org/abs/1904.07850), while the original CondInst is based on FCOS.
 
 ## Setup
 
@@ -133,8 +133,3 @@ In the original paper, FCOS is used for object detection, but in this implementa
         --test_output_dir <path/to/output/directory> \
         --load_engine <path/to/tensorrt.engine>
     ```
-
-# TODO
-- [ ] Add options for switching backbone
-- [ ] Add options to change number of head layers
-- [ ] Add RGB-D support
