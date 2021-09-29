@@ -7,7 +7,8 @@ from condinst import CondInst, get_heatmap_peaks
 from mean_average_precision import MeanAveragePrecision
 
 class LitCondInst(pl.LightningModule):
-    def __init__(self, mode, num_classes, topk, learning_rate=0.01, score_threshold=0.3, mask_threshold=0.5, mask_loss_factor=1.0):
+    def __init__(self, mode, input_channels, num_classes, topk,
+                learning_rate=0.01, score_threshold=0.3, mask_threshold=0.5, mask_loss_factor=1.0):
         super().__init__()
         self.topk = topk
         self.learning_rate = learning_rate
@@ -15,7 +16,7 @@ class LitCondInst(pl.LightningModule):
         self.mask_threshold = mask_threshold
         self.mask_loss_factor = mask_loss_factor
 
-        self.condinst = CondInst(mode, num_classes, topk)
+        self.condinst = CondInst(mode, input_channels, num_classes, topk)
 
         # mAP calculation
         self.map = MeanAveragePrecision(
@@ -44,7 +45,7 @@ class LitCondInst(pl.LightningModule):
             tensorboard.add_scalar("mask_loss", mask_loss, self.global_step)
             tensorboard.add_scalar("loss", loss, self.global_step)
             # Display heatmaps
-            images_and_heatmaps = self.concat_images_and_heatmaps(images, cls_logits, ctr_logits, mask_logits)
+            images_and_heatmaps = self.concat_images_and_heatmaps(images[:,:3,:,:], cls_logits, ctr_logits, mask_logits)
             img_grid = torchvision.utils.make_grid(images_and_heatmaps, nrow=images.shape[0])
             tensorboard.add_image('images', img_grid, global_step=self.global_step)
 

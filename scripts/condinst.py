@@ -104,7 +104,7 @@ def get_heatmap_peaks(cls_logits, topk, kernel=3):
     return labels, cls_preds, points
 
 class CondInst(nn.Module):
-    def __init__(self, mode, num_classes, topk):
+    def __init__(self, mode, input_channels, num_classes, topk):
         super().__init__()
         assert mode in ['training', 'inference']
         self.mode = mode
@@ -214,6 +214,15 @@ class CondInst(nn.Module):
         pi = 0.01
         bias = -math.log((1 - pi) / pi)
         nn.init.constant_(self.cls_head[-1].bias, bias)
+
+        # Change number of input channels
+        if input_channels != 3:
+            output_channels, _, h, w = self.backbone.conv1.weight.shape
+            weight = torch.zeros(output_channels, input_channels, h, w)
+            nn.init.normal_(weight, std=0.01)
+            weight[:, :3, :, :] = self.backbone.conv1.weight
+            self.backbone.conv1.weight = nn.Parameter(weight, requires_grad=True)
+            # self.backbone.conv1.apply(initialize)
 
     def forward(self, images):
         # Convert input images to FP32 or FP16 depending on backbone dtype

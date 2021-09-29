@@ -1,16 +1,22 @@
 import cv2
 import copy
+import numpy as np
 import os.path
+
+import torch
 from torchvision.datasets import CocoDetection
 
 class CocoSegmentationAlb(CocoDetection):
-    def __init__(self, root, annFile, transform):
+    def __init__(self, root, annFile, depthDir, transform):
         super().__init__(root=root, annFile=annFile, transform=transform)
 
         categories = self.coco.dataset['categories']
         self.category_id_to_class_label = {}
         for label, category in enumerate(categories):
             self.category_id_to_class_label[category['id']] = label
+
+        # Depth image directory for RGB-D dataset
+        self.depth_dir = depthDir
 
     def __getitem__(self, index):
 
@@ -29,6 +35,15 @@ class CocoSegmentationAlb(CocoDetection):
         for t in target:
             mask = self.coco.annToMask(t)
             masks.append(mask)
+
+        # Append depth channel to masks to apply transform
+        if self.depth_dir is not None:
+            basename = os.path.basename(path)
+            basename = os.path.splitext(basename)[0] + '.png'
+            path = os.path.join(self.depth_dir, basename)
+            depth = cv2.imread(path, cv2.IMREAD_ANYDEPTH)
+            depth = depth.astype(np.float32) / 1000 # mm to m
+            masks.append(depth)
 
         if self.transform is not None:
             # Get class labels
@@ -50,5 +65,13 @@ class CocoSegmentationAlb(CocoDetection):
                     'segmentation': mask
                 }
                 target.append(t)
+
+        # Extract depth channel from masks and concatenate to image
+        if self.depth_dir is not None:
+            _, h, w = img.shape
+            rgbd = torch.zeros(size=(4, h, w), dtype=torch.float32)
+            rgbd[:3,:,:] = img
+            rgbd[3,:,:] = torch.from_numpy(masks.pop(-1))
+            img = rgbd
 
         return img, target

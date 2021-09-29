@@ -26,9 +26,14 @@ subparsers = parser.add_subparsers(dest="command")
 # Model options
 parser.add_argument('--input_width', type=int, default=640, required=False, help="width of input image (default 640)")
 parser.add_argument('--input_height', type=int, default=480, help="height of input image (default 480)")
+parser.add_argument('--input_channels', type=int, default=3, choices=[3, 4], help="number of input channels (default 3)")
 parser.add_argument('--num_classes', type=int, default=80, help="number of classes (default 80)")
 parser.add_argument('--topk', type=int, default=40, help="max number of object to detect during inference (default 40)")
 parser.add_argument('--mixed_precision', type=bool, default=True, help="allow FP16 training (default True)")
+
+# Pre-processing options
+parser.add_argument('--mean', type=str, default='0.485,0.456,0.406', help="mean values of input data (default '0.485,0.456,0.406')")
+parser.add_argument('--std', type=str, default='0.229,0.224,0.225', help="std values of input data (default '0.229,0.224,0.225')")
 
 # Post-processing options
 parser.add_argument('--score_threshold', type=float, default=0.3, help="score threshold for detection (default 0.3)")
@@ -39,8 +44,10 @@ parser_train = subparsers.add_parser('train', help="train model")
 # Datset options
 parser_train.add_argument('--train_dir', type=str, required=True, help="path to train image dir (required)")
 parser_train.add_argument('--train_ann', type=str, required=True, help="path to train annotation path (required)")
+parser_train.add_argument('--train_depth', type=str, default=None, required=False, help="path to train depth image dir (required only when input_channels=4)")
 parser_train.add_argument('--val_dir', type=str, default=None, required=False, help="path to validation image dir (optional)")
 parser_train.add_argument('--val_ann', type=str, default=None, required=False, help="path to validation dataset dir (optional)")
+parser_train.add_argument('--val_depth', type=str, default=None, required=False, help="path to validation depth image dir (required only when input_channels=4)")
 # Training options
 parser_train.add_argument('--pretrained_model', type=str, default=None, help="path to pretrained model (optional)")
 parser_train.add_argument('--batch_size', type=int, default=8, help="batch size (default 8)")
@@ -61,6 +68,7 @@ parser_eval = subparsers.add_parser('eval', help="evaluate model")
 # Datset options
 parser_eval.add_argument('--val_dir', type=str, required=True, help="path to validation image dir (required)")
 parser_eval.add_argument('--val_ann', type=str, required=True, help="path to validation dataset dir (required)")
+parser_eval.add_argument('--val_depth', type=str, default=None, required=False, help="path to validation depth image dir (required only when input_channels=4)")
 # Evaluation options
 parser_eval.add_argument('--batch_size', type=int, default=8, help="batch size (default 8)")
 parser_eval.add_argument('--num_workers', type=int, default=4, help="number of workers for data loader (default 4)")
@@ -73,6 +81,7 @@ parser_eval.add_argument('--tensorboard_log_dir', type=str, default='../runs', h
 parser_test = subparsers.add_parser('test', help="test model")
 # Test options
 parser_test.add_argument('--test_image_dir', type=str, default='../test_image', help="path to test image dir (default '../test_image')")
+parser_test.add_argument('--test_depth_dir', type=str, default=None, help="path to test image dir (required only when input_channels=4)")
 parser_test.add_argument('--test_output_dir', type=str, default='../test_output', help="path to test output dir (default '../test_output')")
 parser_test.add_argument('--load_model', type=str, default='../models/model.pt', help="path to trained model (default '../models/model.py')")
 
@@ -85,9 +94,10 @@ parser_export.add_argument('--export_onnx', type=str, default='../models/model.o
 args = parser.parse_args()
 
 if __name__ == '__main__':
+    args.mean = [float(item) for item in args.mean.split(',')]
+    args.std = [float(item) for item in args.std.split(',')]
 
     if args.command == 'train':
-        assert args.train_dir is not None and args.train_ann is not None
 
         # Transform for training
         transform = A.Compose([
@@ -95,22 +105,24 @@ if __name__ == '__main__':
             A.transforms.PadIfNeeded(min_width=args.input_width, min_height=args.input_height, border_mode=cv2.BORDER_CONSTANT, value=0),
             A.RandomCrop(width=args.input_width, height=args.input_height),
             A.HorizontalFlip(p=0.5),
-            # A.Rotate(limit=90.0, interpolation=cv2.INTER_LINEAR, border_mode=cv2.BORDER_CONSTANT, p=1.0),
+            A.Rotate(limit=90.0, interpolation=cv2.INTER_LINEAR, border_mode=cv2.BORDER_CONSTANT, p=1.0),
             A.RandomBrightnessContrast(p=0.2),
-            A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            A.Normalize(mean=args.mean, std=args.std),
             ToTensorV2(),
         ])
 
         # Load data
         root_dir_train = os.path.expanduser(args.train_dir)
         ann_path_train = os.path.expanduser(args.train_ann)
-        dataset_train = CocoSegmentationAlb(root=root_dir_train, annFile=ann_path_train, transform=transform)
+        depth_dir_train = os.path.expanduser(args.train_depth) if args.train_depth is not None else None
+        dataset_train = CocoSegmentationAlb(root=root_dir_train, annFile=ann_path_train, depthDir=depth_dir_train, transform=transform)
         coco_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=lambda x: x, num_workers=args.num_workers)
 
         if args.val_dir and args.val_ann:
             root_dir_val = os.path.expanduser(args.val_dir)
             ann_path_val = os.path.expanduser(args.val_ann)
-            dataset_val = CocoSegmentationAlb(root=root_dir_val, annFile=ann_path_val, transform=transform)
+            depth_dir_val = os.path.expanduser(args.val_depth) if args.val_depth is not None else None
+            dataset_val = CocoSegmentationAlb(root=root_dir_val, annFile=ann_path_val, depthDir=depth_dir_val, transform=transform)
             coco_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=lambda x: x, num_workers=args.num_workers)
         else:
             coco_val = None
@@ -126,6 +138,7 @@ if __name__ == '__main__':
         # Create model for training
         model = LitCondInst(
             mode='training',
+            input_channels=args.input_channels,
             num_classes=args.num_classes,
             topk=args.topk,
             learning_rate=args.learning_rate,
@@ -172,6 +185,7 @@ if __name__ == '__main__':
         print("Loading model")
         model = LitCondInst(
             mode='inference',
+            input_channels=args.input_channels,
             num_classes=args.num_classes,
             topk=args.topk,
             score_threshold=args.score_threshold,
@@ -183,20 +197,20 @@ if __name__ == '__main__':
             model.half().to('cuda')
 
         if args.command == 'eval':
-            assert args.val_dir is not None and args.val_ann is not None
 
             # Transform for eval
             transform = A.Compose([
                 A.LongestMaxSize(max_size=args.input_width, interpolation=cv2.INTER_LINEAR),
                 A.transforms.PadIfNeeded(min_width=args.input_width, min_height=args.input_height, border_mode=cv2.BORDER_CONSTANT, value=0),
                 A.CenterCrop(width=args.input_width, height=args.input_height),
-                A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                A.Normalize(mean=args.mean, std=args.std),
                 ToTensorV2(),
             ])
 
             root_dir_val = os.path.expanduser(args.val_dir)
             ann_path_val = os.path.expanduser(args.val_ann)
-            dataset_val = CocoSegmentationAlb(root=root_dir_val, annFile=ann_path_val, transform=transform)
+            depth_dir_val = os.path.expanduser(args.val_depth) if args.val_depth is not None else None
+            dataset_val = CocoSegmentationAlb(root=root_dir_val, annFile=ann_path_val, depthDir=depth_dir_val, transform=transform)
             coco_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=lambda x: x, num_workers=args.num_workers)
 
             # Mixed precision
@@ -234,10 +248,24 @@ if __name__ == '__main__':
 
                 # Preprocessing
                 image = cv2.resize(image, dsize=(args.input_width, args.input_height))
-                image_normalized = (image.astype(np.float32) - np.array([0.485, 0.456, 0.406]) * 255) / (np.array([0.229, 0.224, 0.225]) * 255)
+                image_normalized = (image.astype(np.float32) - np.array(args.mean) * 255) / (np.array(args.std) * 255)
                 image_normalized = image_normalized.transpose(2, 0, 1) # HWC -> CHW
                 image_normalized = image_normalized[None,:,:,:] # CHW -> NCHW
                 image_normalized = torch.from_numpy(image_normalized).clone()
+
+                # Read depth image and concatenate to image
+                if args.test_depth_dir is not None:
+                    basename = os.path.basename(image_path)
+                    basename = os.path.splitext(basename)[0] + '.png'
+                    path = os.path.join(args.test_depth_dir, basename)
+                    depth = cv2.imread(path, cv2.IMREAD_ANYDEPTH)
+                    depth = depth.astype(np.float32)
+
+                    _, _, h, w = image_normalized.shape
+                    rgbd = torch.zeros(size=(1, 4, h, w), dtype=torch.float32)
+                    rgbd[0,:3,:,:] = image_normalized
+                    rgbd[0,3,:,:] = torch.from_numpy(depth).clone() / 1000.
+                    image_normalized = rgbd
 
                 # Use GPU if available
                 device = 'cuda' if torch.cuda.is_available() else 'cpu'
