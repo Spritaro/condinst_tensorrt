@@ -1,5 +1,5 @@
 # Base image from pytorch-lightning
-FROM nvidia/cuda:10.2-cudnn8-devel
+FROM nvidia/cuda:11.1-cudnn8-devel
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -33,11 +33,13 @@ RUN wget https://bootstrap.pypa.io/get-pip.py && \
 RUN pip3 install --upgrade cython
 RUN git clone https://github.com/philferriere/cocoapi.git \
     && cd cocoapi/PythonAPI \
-    && sudo python3 setup.py build_ext install
+    && python3 setup.py build_ext install --user
 
 # Install pytorch
 RUN pip3 install \
-    torch==1.9 \
-    torchvision==0.10 \
+    torch==1.9.0+cu111 \
+    torchvision==0.10.0+cu111 \
+    -f https://download.pytorch.org/whl/torch_stable.html
+RUN pip3 install \
     pytorch-lightning \
     albumentations==0.5.2
