@@ -303,7 +303,7 @@ if __name__ == '__main__':
                     mask_visualize[:,:,0] += masks[:,:,i] * (float(i+1)%8/7)
                     mask_visualize[:,:,1] += masks[:,:,i] * (float(i+1)%4/3)
                     mask_visualize[:,:,2] += masks[:,:,i] * (float(i+1)%2/1)
-                    contours, _ = cv2.findContours(masks[:,:,i].astype(np.uint8)*255, 1, 2)
+                    contours, _ = cv2.findContours(masks[:,:,i].astype(np.uint8)*255, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                     for cnt in contours:
                         x, y, w, h = cv2.boundingRect(cnt)
                         image = cv2.rectangle(image, (x,y), (x+w,y+h), (0,255,0), 2)
