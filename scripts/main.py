@@ -105,7 +105,7 @@ if __name__ == '__main__':
             A.transforms.PadIfNeeded(min_width=args.input_width, min_height=args.input_height, border_mode=cv2.BORDER_CONSTANT, value=0),
             A.RandomCrop(width=args.input_width, height=args.input_height),
             A.HorizontalFlip(p=0.5),
-            A.Rotate(limit=90.0, interpolation=cv2.INTER_LINEAR, border_mode=cv2.BORDER_CONSTANT, p=1.0),
+            # A.Rotate(limit=90.0, interpolation=cv2.INTER_LINEAR, border_mode=cv2.BORDER_CONSTANT, p=0.5),
             A.RandomBrightnessContrast(p=0.2),
             A.Normalize(mean=args.mean, std=args.std),
             ToTensorV2(),
@@ -303,6 +303,10 @@ if __name__ == '__main__':
                     mask_visualize[:,:,0] += masks[:,:,i] * (float(i+1)%8/7)
                     mask_visualize[:,:,1] += masks[:,:,i] * (float(i+1)%4/3)
                     mask_visualize[:,:,2] += masks[:,:,i] * (float(i+1)%2/1)
+                    contours, _ = cv2.findContours(masks[:,:,i].astype(np.uint8)*255, 1, 2)
+                    for cnt in contours:
+                        x, y, w, h = cv2.boundingRect(cnt)
+                        image = cv2.rectangle(image, (x,y), (x+w,y+h), (0,255,0), 2)
                 mask_visualize = np.clip(mask_visualize, 0, 1)
                 mask_visualize = mask_visualize * 255
                 image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
