@@ -300,11 +300,12 @@ if __name__ == '__main__':
                 # Visualize masks
                 mask_visualize = np.zeros((args.input_height, args.input_width, 3), dtype=np.float32)
                 for i in range(masks.shape[2]):
-                    mask_visualize[:,:,0] += masks[:,:,i] * (float(i+1)%8/7)
+                    mask_visualize[:,:,0] += masks[:,:,i] * (float(i+1)%5/4)
                     mask_visualize[:,:,1] += masks[:,:,i] * (float(i+1)%4/3)
-                    mask_visualize[:,:,2] += masks[:,:,i] * (float(i+1)%2/1)
+                    mask_visualize[:,:,2] += masks[:,:,i] * (float(i+1)%3/2)
                     contours, _ = cv2.findContours(masks[:,:,i].astype(np.uint8)*255, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                    for cnt in contours:
+                    if len(contours) > 0:
+                        cnt = np.concatenate(contours, axis=0)
                         x, y, w, h = cv2.boundingRect(cnt)
                         image = cv2.rectangle(image, (x,y), (x+w,y+h), (0,255,0), 2)
                 mask_visualize = np.clip(mask_visualize, 0, 1)

@@ -140,9 +140,9 @@ if __name__ == '__main__':
         # Visualize masks
         mask_visualize = np.zeros((480, 640, 3), dtype=np.float32)
         for i in range(masks.shape[2]):
-            mask_visualize[:,:,0] += masks[:,:,i] * (float(i+1)%8/7)
+            mask_visualize[:,:,0] += masks[:,:,i] * (float(i+1)%5/4)
             mask_visualize[:,:,1] += masks[:,:,i] * (float(i+1)%4/3)
-            mask_visualize[:,:,2] += masks[:,:,i] * (float(i+1)%2/1)
+            mask_visualize[:,:,2] += masks[:,:,i] * (float(i+1)%3/2)
         mask_visualize = np.clip(mask_visualize, 0, 1)
         mask_visualize = mask_visualize * 255
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
