@@ -11,7 +11,7 @@ def calc_mask_ious(labels, scores, masks, targets, score_threshold, mask_thresho
         score_threshold: Float
         mask_threshold: Float
     Returns:
-        matched_gt_labels: List[Tensor[]]
+        matched_labels: List[Tensor[]]
         matched_scores: List[Tensor[]]
         matched_ious: List[Tensor[]]
     """
@@ -22,7 +22,7 @@ def calc_mask_ious(labels, scores, masks, targets, score_threshold, mask_thresho
 
     masks = (masks > mask_threshold).to(dtype=masks.dtype)
 
-    matched_gt_labels = []
+    matched_labels = []
     matched_scores = []
     matched_ious = []
     for batch_i in range(num_batch):
@@ -70,13 +70,17 @@ def calc_mask_ious(labels, scores, masks, targets, score_threshold, mask_thresho
 
             if max_iou_gt_i is not None:
                 matched_gt_i.append(max_iou_gt_i)
-                matched_gt_labels.append(gt_labels[max_iou_gt_i])
+                matched_labels.append(labels[batch_i, pred_i])
                 matched_scores.append(scores[batch_i, pred_i])
                 matched_ious.append(max_iou)
+            else:
+                matched_labels.append(labels[batch_i, pred_i])
+                matched_scores.append(scores[batch_i, pred_i])
+                matched_ious.append(0.0)
 
         # print("batch {} GT {} detected {}".format(batch_i, num_objects, len(matched_gt_i)))
 
-    return matched_gt_labels, matched_scores, matched_ious
+    return matched_labels, matched_scores, matched_ious
 
 class MeanAveragePrecision(object):
 
@@ -103,10 +107,10 @@ class MeanAveragePrecision(object):
         Returns:
             None
         """
-        gt_labels, scores, ious = calc_mask_ious(
+        labels, scores, ious = calc_mask_ious(
             labels, scores, masks, targets, score_threshold=self.score_threshold, mask_threshold=self.mask_threshold)
-        for gt_label, score, iou in zip(gt_labels, scores, ious):
-            self.ious[gt_label].append({'score': score, 'iou': iou})
+        for label, score, iou in zip(labels, scores, ious):
+            self.ious[label].append({'score': score, 'iou': iou})
 
         # Count GTs
         for target in targets:
@@ -145,16 +149,18 @@ class MeanAveragePrecision(object):
 
                 # Calculate interpolated precisions
                 interplated_precisions = []
-                max_precision = 0
+                max_precision = precisions[-1] if recalls[-1] == 1 else 0
                 recall_i = len(self.recall_thresholds) - 1
                 for precision, recall in reversed(list(zip(precisions, recalls))):
 
-                    while recall <= self.recall_thresholds[recall_i] / 100.0:
+                    while self.recall_thresholds[recall_i] / 100.0 >= recall:
                         # print("recall_i {} max_precision {} recall {} threshold {}".format(recall_i, max_precision, recall, self.recall_thresholds[recall_i]/100.0))
                         interplated_precisions.append(max_precision)
-                        if recall_i <= 0:
-                            break
                         recall_i -= 1
+                        if recall_i < 0:
+                            break
+                    if recall_i < 0:
+                        break
 
                     if precision > max_precision:
                         max_precision = precision
