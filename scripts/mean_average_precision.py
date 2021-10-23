@@ -149,7 +149,7 @@ class MeanAveragePrecision(object):
 
                 # Calculate interpolated precisions
                 interplated_precisions = []
-                max_precision = precisions[-1] if recalls[-1] == 1 else 0
+                max_precision = 0 if (len(recalls) == 0 or recalls[-1] != 0) else precisions[-1]
                 recall_i = len(self.recall_thresholds) - 1
                 for precision, recall in reversed(list(zip(precisions, recalls))):
 
