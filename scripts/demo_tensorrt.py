@@ -70,87 +70,117 @@ class CondInst(object):
         return probs, labels, masks, t1 - t0
 
 parser = argparse.ArgumentParser(description="Parameters for TensorRT demo")
+parser.add_argument('--camera', action='store_true', help="set this option to use camera image for test")
 parser.add_argument('--test_image_dir', type=str, default='../test_image', help="path to test image dir (default '../test_image')")
 parser.add_argument('--test_depth_dir', type=str, default=None, help="path to test image dir (required only for model with input_channels=4)")
 parser.add_argument('--test_output_dir', type=str, default='../test_output', help="path to test output dir (default '../test_output')")
 parser.add_argument('--load_engine', type=str, default='../models/model.engine', help="path to trained model (default '../models/model.py')")
 args = parser.parse_args()
 
+def infer_and_visualize(image):
+    # Preprocessing
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    image = cv2.resize(image, dsize=(640, 480))
+    image_normalized = (image.astype(np.float32) - np.array([0.485, 0.456, 0.406]) * 255.) / (np.array([0.229, 0.224, 0.225]) * 255.)
+    image_normalized = image_normalized.transpose(2, 0, 1) # HWC -> CHW
+    image_normalized = image_normalized[None,:,:,:] # CHW -> NCHW
+
+    # Read depth image and concatenate to image
+    if args.test_depth_dir is not None:
+        basename = os.path.basename(image_path)
+        basename = os.path.splitext(basename)[0] + '.png'
+        path = os.path.join(args.test_depth_dir, basename)
+        depth = cv2.imread(path, cv2.IMREAD_ANYDEPTH)
+        depth = depth.astype(np.float32)
+
+        _, _, h, w = image_normalized.shape
+        rgbd = np.zeros(shape=(1, 4, h, w), dtype=np.float32)
+        rgbd[0,:3,:,:] = image_normalized
+        rgbd[0,3,:,:] = depth / 1000. # mm to m
+        image_normalized = rgbd
+
+    # Perform inference
+    probs, labels, masks, t = condinst.infer(image_normalized)
+    print("Inference time {} s".format(t))
+
+    # Postprocessing
+    score_threshold=0.3
+    num_objects, = probs[probs > score_threshold].shape
+    print("{} obects detected".format(num_objects))
+
+    probs = probs[0,:num_objects]
+    labels = labels[0,:num_objects]
+    if num_objects > 0:
+        masks = masks[0,:num_objects,:,:]
+    else:
+        masks = np.zeros((1, 480, 640), dtype=np.float32)
+
+    print("labels {}".format(labels))
+    print("probabilities {}".format(probs))
+
+    masks = masks.transpose(1, 2, 0)
+    masks = cv2.resize(masks, dsize=(640, 480), interpolation=cv2.INTER_LINEAR)
+    masks = (masks > 0.5).astype(np.float32)
+
+    # Add channel dimension if removed by cv2.resize()
+    if len(masks.shape) == 2:
+        masks = masks[...,None]
+
+    # Visualize masks
+    mask_visualize = np.zeros((480, 640, 3), dtype=np.float32)
+    for i in range(masks.shape[2]):
+        mask_visualize[:,:,0] += masks[:,:,i] * (float(i+1)%5/4)
+        mask_visualize[:,:,1] += masks[:,:,i] * (float(i+1)%4/3)
+        mask_visualize[:,:,2] += masks[:,:,i] * (float(i+1)%3/2)
+    mask_visualize = np.clip(mask_visualize, 0, 1)
+    mask_visualize = mask_visualize * 255
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    image_visualize = image / 4 + mask_visualize * 3 / 4
+    image_visualize = image_visualize.astype(np.uint8)
+    return image_visualize
+
 if __name__ == '__main__':
 
     # Load TensorRT engine
+    print("loading TensorRT engine")
     condinst = CondInst(args.load_engine)
 
-    # Get list of image paths
-    image_paths = glob.glob(os.path.join(args.test_image_dir, '*.jpg'))
-    image_paths += glob.glob(os.path.join(args.test_image_dir, '*.jpeg'))
-    image_paths += glob.glob(os.path.join(args.test_image_dir, '*.png'))
+    if args.camera:
 
-    for image_path in image_paths:
+        cap = cv2.VideoCapture(-1, cv2.CAP_V4L)
 
-        # Load test images
-        print("Loading {}".format(image_path))
-        image = cv2.imread(image_path)
+        while True:
+            # Read camera image
+            ret, image = cap.read()
+            if not ret:
+                print("failed to read camera image")
+                break
 
-        # Preprocessing
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image = cv2.resize(image, dsize=(640, 480))
-        image_normalized = (image.astype(np.float32) - np.array([0.485, 0.456, 0.406]) * 255.) / (np.array([0.229, 0.224, 0.225]) * 255.)
-        image_normalized = image_normalized.transpose(2, 0, 1) # HWC -> CHW
-        image_normalized = image_normalized[None,:,:,:] # CHW -> NCHW
+            image_visualize = infer_and_visualize(image)
 
-        # Read depth image and concatenate to image
-        if args.test_depth_dir is not None:
-            basename = os.path.basename(image_path)
-            basename = os.path.splitext(basename)[0] + '.png'
-            path = os.path.join(args.test_depth_dir, basename)
-            depth = cv2.imread(path, cv2.IMREAD_ANYDEPTH)
-            depth = depth.astype(np.float32)
+            cv2.imshow("test", image_visualize)
+            key = cv2.waitKey(100)
+            if key & 0xFF == ord('q'):
+                break
 
-            _, _, h, w = image_normalized.shape
-            rgbd = np.zeros(shape=(1, 4, h, w), dtype=np.float32)
-            rgbd[0,:3,:,:] = image_normalized
-            rgbd[0,3,:,:] = depth / 1000. # mm to m
-            image_normalized = rgbd
+        cap.release()
+        cv2.destroyAllWindows()
 
-        # Perform inference
-        probs, labels, masks, t = condinst.infer(image_normalized)
-        print("Inference time {} s".format(t))
+    else:
+        # Get list of image paths
+        image_paths = glob.glob(os.path.join(args.test_image_dir, '*.jpg'))
+        image_paths += glob.glob(os.path.join(args.test_image_dir, '*.jpeg'))
+        image_paths += glob.glob(os.path.join(args.test_image_dir, '*.png'))
 
-        # Postprocessing
-        score_threshold=0.3
-        num_objects, = probs[probs > score_threshold].shape
-        print("{} obects detected".format(num_objects))
+        for image_path in image_paths:
+            # Load test images
+            print("Loading {}".format(image_path))
+            image = cv2.imread(image_path)
 
-        probs = probs[0,:num_objects]
-        labels = labels[0,:num_objects]
-        masks = masks[0,:num_objects,:,:]
+            image_visualize = infer_and_visualize(image)
 
-        print("labels {}".format(labels))
-        print("probabilities {}".format(probs))
-
-        masks = masks.transpose(1, 2, 0)
-        masks = cv2.resize(masks, dsize=(640, 480), interpolation=cv2.INTER_LINEAR)
-        masks = (masks > 0.5).astype(np.float32)
-
-        # Add channel dimension if removed by cv2.resize()
-        if len(masks.shape) == 2:
-            masks = masks[...,None]
-
-        # Visualize masks
-        mask_visualize = np.zeros((480, 640, 3), dtype=np.float32)
-        for i in range(masks.shape[2]):
-            mask_visualize[:,:,0] += masks[:,:,i] * (float(i+1)%5/4)
-            mask_visualize[:,:,1] += masks[:,:,i] * (float(i+1)%4/3)
-            mask_visualize[:,:,2] += masks[:,:,i] * (float(i+1)%3/2)
-        mask_visualize = np.clip(mask_visualize, 0, 1)
-        mask_visualize = mask_visualize * 255
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-        image_visualize = image / 4 + mask_visualize * 3 / 4
-        mask_visualize = mask_visualize.astype(np.uint8)
-
-        # Save results
-        save_path = os.path.join(args.test_output_dir, os.path.basename(image_path))
-        print("Saving to {}".format(save_path))
-        os.makedirs(args.test_output_dir, exist_ok=True)
-        cv2.imwrite(save_path, image_visualize)
+            # Save results
+            save_path = os.path.join(args.test_output_dir, os.path.basename(image_path))
+            print("Saving to {}".format(save_path))
+            os.makedirs(args.test_output_dir, exist_ok=True)
+            cv2.imwrite(save_path, image_visualize)

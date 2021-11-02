@@ -1,16 +1,13 @@
 #!/bin/bash
 
 docker run -it --rm \
-    --runtime nvidia \
-    --network host \
-    --group-add video \
+    --gpus all \
     --name condinst_tensorrt \
-    --env "DISPLAY" \
+    --env="DISPLAY" \
     -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
     -v $1:/home/appuser/condinst_tensorrt:rw \
     -v $2:/home/appuser/dataset:ro \
     -w /home/appuser/condinst_tensorrt \
-    --shm-size 512mb \
-    --privileged \
-    condinst_tensorrt \
+    -p 6006:6006 \
+    tensorrt \
     bash
