@@ -357,37 +357,38 @@ class CondInst(nn.Module):
         heatmap_losses = []
         mask_losses = []
         for i in range(num_batch):
+            num_objects = len(targets[i])
 
-            # Skip if no object in targets
-            if len(targets[i]) == 0:
-                heatmap_losses.append(torch.tensor(0, dtype=dtype, device=device))
-                mask_losses.append(torch.tensor(0, dtype=dtype, device=device))
-                continue
+            # # Skip if no object in targets
+            # if len(targets[i]) == 0:
+            #     heatmap_losses.append(torch.tensor(0, dtype=dtype, device=device))
+            #     mask_losses.append(torch.tensor(0, dtype=dtype, device=device))
+            #     continue
 
-            # Convert list of dicts to Tensors
-            gt_labels = torch.as_tensor([obj['class_labels'] for obj in targets[i]], dtype=torch.int64, device=device) # Tensor[num_objects]
-            gt_masks = torch.stack([torch.as_tensor(obj['segmentation'], dtype=dtype, device=device) for obj in targets[i]], dim=0) # Tensor[num_objects, image_height, image_width]
+            if num_objects > 0:
+                # Convert list of dicts to Tensors
+                gt_labels = torch.as_tensor([obj['class_labels'] for obj in targets[i]], dtype=torch.int64, device=device) # Tensor[num_objects]
+                gt_masks = torch.stack([torch.as_tensor(obj['segmentation'], dtype=dtype, device=device) for obj in targets[i]], dim=0) # Tensor[num_objects, image_height, image_width]
 
-            # Downsample GT masks
-            gt_masks_size_feature = F.interpolate(gt_masks[None,...], size=(feature_height, feature_width)) # Tensor[1, num_objects, feature_height, feature_width]
-            gt_masks_size_feature = gt_masks_size_feature[0,...] # Tensor[num_objects, feature_height, feature_width]
+                # Downsample GT masks
+                gt_masks_size_feature = F.interpolate(gt_masks[None,...], size=(feature_height, feature_width)) # Tensor[1, num_objects, feature_height, feature_width]
+                gt_masks_size_feature = gt_masks_size_feature[0,...] # Tensor[num_objects, feature_height, feature_width]
 
-            # Generate GT heatmap
-            gt_heatmap, gt_centroids = generate_heatmap(gt_labels, gt_masks_size_feature, num_classes) # Tensor[num_objects, feature_height, feature_width], Tensor[num_objects, (x, y)]
+                # Generate GT heatmap
+                gt_heatmap, gt_centroids = generate_heatmap(gt_labels, gt_masks_size_feature, num_classes) # Tensor[num_classes, feature_height, feature_width], Tensor[num_objects, (x, y)]
 
-            # Generate mask for each object
-            masks = self.generate_mask(ctr_logits[i], mask_logits[i], gt_centroids) # Tensor[num_objects, mask_height, mask_width]
+                # Generate mask for each object
+                masks = self.generate_mask(ctr_logits[i], mask_logits[i], gt_centroids) # Tensor[num_objects, mask_height, mask_width]
 
-            # Calculate loss
-            num_objects, _, _ = gt_masks.shape
-
-            heatmap_loss = heatmap_focal_loss(cls_logits[i].sigmoid(), gt_heatmap, alpha=2, gamma=4) / num_objects
-
-            # gt_masks_size_mask = F.interpolate(gt_masks[None,...], size=(mask_height, mask_width)) # Tensor[1, num_objects, mask_height, mask_width]
-            # _, input_height, input_width = gt_masks.shape
-            # masks_input_size = F.interpolate(masks[None,...], size=(input_height, input_width), mode='bilinear', align_corners=False) # Tensor[1, num_objects, mask_height, mask_width]
-            gt_masks_size_mask = F.adaptive_avg_pool2d(gt_masks[None,...], output_size=(mask_height, mask_width))
-            mask_loss = dice_loss(masks, gt_masks_size_mask)
+                # Calculate loss
+                heatmap_loss = heatmap_focal_loss(cls_logits[i].sigmoid(), gt_heatmap, alpha=2, gamma=4) / num_objects
+                gt_masks_size_mask = F.adaptive_avg_pool2d(gt_masks[None,...], output_size=(mask_height, mask_width))
+                mask_loss = dice_loss(masks, gt_masks_size_mask)
+            else:
+                # No GT objects
+                gt_heatmap = torch.zeros_like(cls_logits[i])
+                heatmap_loss = heatmap_focal_loss(cls_logits[i].sigmoid(), gt_heatmap, alpha=2, gamma=4)
+                mask_loss = torch.tensor(0, dtype=dtype, device=device, requires_grad=True)
 
             heatmap_losses.append(heatmap_loss)
             mask_losses.append(mask_loss)
