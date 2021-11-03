@@ -9,7 +9,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
     git \
     libgl1-mesa-dev \
-    python3-opencv \
+    libgtk2.0-dev \
+    pkg-config \
     python3-dev \
     wget
 
@@ -18,7 +19,7 @@ ARG USERNAME=appuser
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
 RUN groupadd --gid $USER_GID $USERNAME \
-    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
+    && useradd --uid $USER_UID --gid $USER_GID --groups video -m $USERNAME \
     && apt-get update \
     && apt-get install -y sudo \
     && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
@@ -36,3 +37,6 @@ RUN wget https://bootstrap.pypa.io/get-pip.py && \
 RUN pip3 install \
     pytorch-lightning \
     albumentations==0.5.2
+
+# Reinstall OpenCV
+RUN pip3 uninstall -y opencv-python && pip3 install opencv-python
