@@ -1,4 +1,3 @@
-# Base image from pytorch-lightning
 FROM nvidia/cuda:11.1-cudnn8-devel
 
 ENV DEBIAN_FRONTEND=noninteractive

@@ -1,24 +1,25 @@
-# Simple Implementation of CondInst for TensorRT
+# Unofficial Implementation of CondInst for TensorRT
 
-This repository is an unofficial simplified implementation of [CondInst: Conditional Convolutions for Instance Segmentation](https://arxiv.org/abs/2003.05664).
-This implementation is based on [CenterNet: Objects as Points](https://arxiv.org/abs/1904.07850), while the original CondInst is based on FCOS.
+This repository is an unofficial implementation of [CondInst: Conditional Convolutions for Instance Segmentation](https://arxiv.org/abs/2003.05664).
+
+This implementation utilizes heatmap-based object detection. Please see [CornerNet: Detecting Objects as Paired Keypoints](https://arxiv.org/abs/1808.01244) and [CenterNet: Objects as Points](https://arxiv.org/abs/1904.07850) for details.
 
 ## Setup
 
-- Build docker image (without TensorRT).
+- Build docker image.
+    ```sh
+    $ cd docker
+    $ docker build -t condinst_tensorrt -f Dockerfile.tensorrt .
+    ```
+
+- To build docker image without TensorRT, run the following command instead.
 
     ```sh
     $ cd docker
     $ docker build -t condinst_tensorrt .
     ```
 
-- To build docker image with TensorRT, run the following command instead.
-    ```sh
-    $ cd docker
-    $ docker build -t condinst_tensorrt -f Dockerfile.tensorrt .
-    ```
-
-- To build docker image for Jetson, run the following command instead.
+- To build docker image on Jetson, run the following command.
     ```sh
     $ cd docker
     $ docker build -t condinst_tensorrt -f Dockerfile.jetson .
@@ -72,7 +73,7 @@ This implementation is based on [CenterNet: Objects as Points](https://arxiv.org
 
 ### Evaluation
 
-- Evaluate model.
+- Evaluate model. This feature is experimental and may not produce accurate results.
     ```sh
     $ python3 main.py \
         --input_width 640 \
