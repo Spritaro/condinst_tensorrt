@@ -1,5 +1,6 @@
 import argparse
 import cv2
+import datetime
 import glob
 import matplotlib.pyplot as plt
 import numpy as np
@@ -128,10 +129,14 @@ if __name__ == '__main__':
             coco_val = None
 
         # Save checkpoints
-        os.makedirs(args.checkpoint_dir, exist_ok=True)
+        path = os.path.join(args.checkpoint_dir, datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+        os.makedirs(path, exist_ok=True)
         checkpoint_callback = ModelCheckpoint(
-            dirpath=args.checkpoint_dir,
-            filename='{epoch:03d}-{step:06d}',
+            monitor='val_loss',
+            dirpath=path,
+            filename='{epoch:03d}-{step:06d}-{val_loss:.2f}',
+            save_top_k=3,
+            mode='min',
             save_last=True
         )
 

@@ -68,6 +68,9 @@ class LitCondInst(pl.LightningModule):
         tensorboard.add_scalar("val_mask_loss", mask_loss, self.global_step)
         tensorboard.add_scalar("val_loss", loss, self.global_step)
 
+        # ModelCheckpoint metrics
+        self.log("val_loss", loss)
+
         return loss
 
     def test_step(self, batch, batch_idx):
