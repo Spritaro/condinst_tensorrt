@@ -299,42 +299,41 @@ class CondInst(nn.Module):
         mask_logits = torch.cat([mask_logits, location_xs[:,None,:,:], location_ys[:,None,:,:]], dim=1) # Tensor[num_objects, num_filters+2, mask_height, mask_width]
 
         # Create instance-aware mask head
-        masks = []
-        for no_obj in range(num_objects):
-            px = centroids[no_obj,0] # Tensor[]
-            py = centroids[no_obj,1] # Tensor[]
-            weights1 = ctr_logits[:self.conv1_w, py, px].view(self.num_filters, self.num_filters+2, 1, 1)
-            weights2 = ctr_logits[self.conv1_w:self.conv2_w, py, px].view(self.num_filters, self.num_filters, 1, 1)
-            weights3 = ctr_logits[self.conv2_w:self.conv3_w, py, px].view(1, self.num_filters, 1, 1)
-            biases1 = ctr_logits[self.conv3_w:self.conv1_b, py, px]
-            biases2 = ctr_logits[self.conv1_b:self.conv2_b, py, px]
-            biases3 = ctr_logits[self.conv2_b:self.conv3_b, py, px]
+        px = centroids[:,0] # Tensor[num_objects]
+        py = centroids[:,1] # Tensor[num_objects]
+        weights1 = ctr_logits[:self.conv1_w, py, px].view(self.num_filters, self.num_filters+2, num_objects, 1)
+        weights2 = ctr_logits[self.conv1_w:self.conv2_w, py, px].view(self.num_filters, self.num_filters, num_objects, 1)
+        weights3 = ctr_logits[self.conv2_w:self.conv3_w, py, px].view(1, self.num_filters, num_objects, 1)
+        biases1 = ctr_logits[self.conv3_w:self.conv1_b, py, px]
+        biases2 = ctr_logits[self.conv1_b:self.conv2_b, py, px]
+        biases3 = ctr_logits[self.conv2_b:self.conv3_b, py, px]
 
-            # Apply mask head to mask features with relative coordinates
-            # NOTE: TensorRT7 does not support dynamic filter for conv2d. Use matmul instead.
-            x = mask_logits[no_obj:no_obj+1,:,:,:] # Tensor[1, num_filters+2, mask_height, mask_width]
+        # Apply mask head to mask features with relative coordinates
+        # NOTE: TensorRT7 does not support dynamic filter for conv2d. Use matmul instead.
+        # NOTE: matmul is used in the following way: [N, H*W, 1, C1] * [N, 1, C1, C2] = [N, H*W, 1, C2]
+        x = mask_logits.view(num_objects, self.num_filters+2, -1, 1) # Tensor[num_objects, num_filters+2, mask_height*mask_width, 1]
+        x = x.permute(0, 2, 3, 1) # Tensor[num_objects, mask_height*mask_width, 1, num_filters+2]
 
-            x = x.permute(2, 3, 0, 1) # Tensor[mask_height, mask_width, 1, num_filters+2]
-            weights1 = weights1.permute(2, 3, 1, 0) # Tensor[1, 1, num_filters+2, num_filters]
-            x = torch.matmul(x, weights1) # Tensor[mask_height, mask_width, 1, num_filters]
-            x = x + biases1[None, None, None, :]
-            x = F.relu(x)
+        weights1 = weights1.permute(2, 3, 1, 0) # Tensor[num_objects, 1, num_filters+2, num_filters]
+        x = torch.matmul(x, weights1) # Tensor[num_objects, mask_height*mask_width, 1, num_filters]
+        biases1 = biases1[:, None, None, :].permute(3, 1, 2, 0) # Tensor[num_object, 1, 1, num_filters]
+        x = x + biases1
+        x = F.relu(x)
 
-            weights2 = weights2.permute(2, 3, 1, 0) # Tensor[1, 1, num_filters, num_filters]
-            x = torch.matmul(x, weights2) # Tensor[mask_height, mask_width, 1, num_filters]
-            x = x + biases2[None, None, None, :]
-            x = F.relu(x)
+        weights2 = weights2.permute(2, 3, 1, 0) # Tensor[num_objects, 1, num_filters, num_filters]
+        x = torch.matmul(x, weights2) # Tensor[num_objects, mask_height*mask_width, 1, num_filters]
+        biases2 = biases2[:, None, None, :].permute(3, 1, 2, 0) # Tensor[num_object, 1, 1, num_filters]
+        x = x + biases2
+        x = F.relu(x)
 
-            weights3 = weights3.permute(2, 3, 1, 0) # Tensor[1, 1, num_filters, 1]
-            x = torch.matmul(x, weights3) # Tensor[mask_height, mask_width, 1, 1]
-            x = x + biases3[None, None, None, :]
+        weights3 = weights3.permute(2, 3, 1, 0) # Tensor[num_objects, 1, num_filters, 1]
+        x = torch.matmul(x, weights3) # Tensor[num_objects, mask_height*mask_width, 1, 1]
+        biases3 = biases3[:, None, None, :].permute(3, 1, 2, 0) # Tensor[num_objects, 1, 1, 1]
+        x = x + biases3
 
-            x = x.permute(2, 3, 0, 1) # Tensor[1, 1, mask_height, mask_width]
-            x = x.view(1, mask_height, mask_width) # Tensor[1, mask_height, mask_width]
-            mask = torch.sigmoid(x)
+        x = x.view(num_objects, mask_height, mask_width) # Tensor[num_objects, mask_height, mask_width]
+        masks = torch.sigmoid(x)
 
-            masks.append(mask)
-        masks = torch.cat(masks, dim=0)
         return masks
 
     def loss(self, cls_logits, ctr_logits, mask_logits, targets):
