@@ -261,7 +261,7 @@ class CondInst(nn.Module):
                 mask = self.generate_mask(ctr_logits[i], mask_logits[i], points[i])
                 masks.append(mask)
             masks = torch.stack(masks, dim=0)
-            return labels, scores, masks
+            return labels.int(), scores.float(), masks.float()
 
     def generate_mask(self, ctr_logits, mask_logits, centroids):
         """
