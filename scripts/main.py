@@ -329,6 +329,10 @@ if __name__ == '__main__':
 
             # Export to ONNX
             print("Exporting to ONNX")
+            input_names = ["input"]
+            output_names = ["output_labels", "output_scores", "output_masks"]
             input_sample = torch.randn((1, args.input_channels, args.input_height, args.input_width))
-            model.to_onnx(args.export_onnx, input_sample, export_params=True, opset_version=11)
+            model.to_onnx(
+                args.export_onnx, input_sample, export_params=True, opset_version=11,
+                input_names=input_names, output_names=output_names)
             print("Done")

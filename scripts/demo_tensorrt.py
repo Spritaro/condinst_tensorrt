@@ -21,17 +21,26 @@ class CondInst(object):
         # Create context
         self.trt_context = engine.create_execution_context()
 
-        # Determine dimensions and create page-locked memory buffers
-        self.h_input = cuda.pagelocked_empty(trt.volume(self.trt_context.get_binding_shape(0)), dtype=np.float32)
-        self.h_output0 = cuda.pagelocked_empty(trt.volume(self.trt_context.get_binding_shape(1)), dtype=np.float16)
-        self.h_output1 = cuda.pagelocked_empty(trt.volume(self.trt_context.get_binding_shape(2)), dtype=np.int32)
-        self.h_output2 = cuda.pagelocked_empty(trt.volume(self.trt_context.get_binding_shape(3)), dtype=np.float16)
+        names = ["input", "output_labels", "output_scores", "output_masks"]
+        self.h_buffers = []
+        self.d_memories = []
+        self.bindings = [None] * len(names)
+        for name in names:
+            idx = engine.get_binding_index(name)
+            volume = trt.volume(self.trt_context.get_binding_shape(idx))
+            dtype = trt.nptype(engine.get_binding_dtype(idx))
+            print(idx, volume, dtype)
 
-        # Allocate device memory for inputs and outputs.
-        self.d_input = cuda.mem_alloc(self.h_input.nbytes)
-        self.d_output0 = cuda.mem_alloc(self.h_output0.nbytes)
-        self.d_output1 = cuda.mem_alloc(self.h_output1.nbytes)
-        self.d_output2 = cuda.mem_alloc(self.h_output2.nbytes)
+            # Create host memory buffers
+            buffer = cuda.pagelocked_empty(volume, dtype)
+            self.h_buffers.append(buffer)
+
+            # Allocate device memory
+            memory = cuda.mem_alloc(buffer.nbytes)
+            self.d_memories.append(memory)
+
+            # Set binding
+            self.bindings[idx] = int(memory)
 
         # Create a stream in which to copy inputs/outputs and run inference
         self.stream = cuda.Stream()
@@ -43,31 +52,30 @@ class CondInst(object):
         num_batch, num_chanels, height, width = images.shape
 
         # Copy input data to host memory buffer
-        np.copyto(self.h_input, images.ravel())
+        np.copyto(self.h_buffers[0], images.ravel())
 
         # Transfer input data to the GPU.
-        cuda.memcpy_htod_async(self.d_input, self.h_input, self.stream)
+        cuda.memcpy_htod_async(self.d_memories[0], self.h_buffers[0], self.stream)
 
         # Run inference.
         self.trt_context.execute_async_v2(
-            bindings=[int(self.d_input), int(self.d_output0), int(self.d_output1), int(self.d_output2)],
+            bindings=self.bindings,
             stream_handle=self.stream.handle)
 
         # Transfer predictions back from the GPU.
-        cuda.memcpy_dtoh_async(self.h_output0, self.d_output0, self.stream)
-        cuda.memcpy_dtoh_async(self.h_output1, self.d_output1, self.stream)
-        cuda.memcpy_dtoh_async(self.h_output2, self.d_output2, self.stream)
+        for i in range(1, 3):
+            cuda.memcpy_dtoh_async(self.h_buffers[i], self.d_memories[i], self.stream)
 
         # Synchronize the stream
         self.stream.synchronize()
 
         # Reshape
-        probs = self.h_output0.astype(np.float32).reshape(num_batch, -1)
-        labels = self.h_output1.reshape(num_batch, -1)
-        masks = self.h_output2.astype(np.float32).reshape(num_batch, -1, height//4, width//4)
+        labels = self.h_buffers[1].reshape(num_batch, -1)
+        probs = self.h_buffers[2].astype(np.float32).reshape(num_batch, -1)
+        masks = self.h_buffers[3].astype(np.float32).reshape(num_batch, -1, height//4, width//4)
 
         t1 = time.time()
-        return probs, labels, masks, t1 - t0
+        return labels, probs, masks, t1 - t0
 
 parser = argparse.ArgumentParser(description="Parameters for TensorRT demo")
 parser.add_argument('--camera', action='store_true', help="set this option to use camera image for test")
@@ -100,7 +108,7 @@ def infer_and_visualize(image):
         image_normalized = rgbd
 
     # Perform inference
-    probs, labels, masks, t = condinst.infer(image_normalized)
+    labels, probs, masks, t = condinst.infer(image_normalized)
     print("Inference time {} s".format(t))
 
     # Postprocessing
