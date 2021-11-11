@@ -117,7 +117,7 @@ if __name__ == '__main__':
         ann_path_train = os.path.expanduser(args.train_ann)
         depth_dir_train = os.path.expanduser(args.train_depth) if args.train_depth is not None else None
         dataset_train = CocoSegmentationAlb(root=root_dir_train, annFile=ann_path_train, depthDir=depth_dir_train, transform=transform)
-        coco_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=lambda x: x, num_workers=args.num_workers)
+        coco_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, collate_fn=lambda x: x, pin_memory=True)
 
         if args.val_dir and args.val_ann:
             root_dir_val = os.path.expanduser(args.val_dir)
