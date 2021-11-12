@@ -101,13 +101,12 @@ if __name__ == '__main__':
     if args.command == 'train':
 
         # Transform for training
-        transform = A.Compose([
-            A.RandomScale(scale_limit=0.5, interpolation=cv2.INTER_LINEAR, p=0.5),
+        transform_train = A.Compose([
+            A.Affine(scale={'x': (0.7, 1.5), 'y': (0.7, 1.5)}, rotate=(-90, 90), interpolation=cv2.INTER_LINEAR, mode=cv2.BORDER_CONSTANT, p=0.8),
             A.transforms.PadIfNeeded(min_width=args.input_width, min_height=args.input_height, border_mode=cv2.BORDER_CONSTANT, value=0),
             A.RandomCrop(width=args.input_width, height=args.input_height),
             A.HorizontalFlip(p=0.5),
-            # A.Rotate(limit=90.0, interpolation=cv2.INTER_LINEAR, border_mode=cv2.BORDER_CONSTANT, p=0.5),
-            A.RandomBrightnessContrast(p=0.2),
+            A.RandomBrightnessContrast(p=0.5),
             A.Normalize(mean=args.mean, std=args.std),
             ToTensorV2(),
         ])
@@ -116,14 +115,21 @@ if __name__ == '__main__':
         root_dir_train = os.path.expanduser(args.train_dir)
         ann_path_train = os.path.expanduser(args.train_ann)
         depth_dir_train = os.path.expanduser(args.train_depth) if args.train_depth is not None else None
-        dataset_train = CocoSegmentationAlb(root=root_dir_train, annFile=ann_path_train, depthDir=depth_dir_train, transform=transform)
+        dataset_train = CocoSegmentationAlb(root=root_dir_train, annFile=ann_path_train, depthDir=depth_dir_train, transform=transform_train)
         coco_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, collate_fn=lambda x: x, pin_memory=True)
 
         if args.val_dir and args.val_ann:
+            transform_val = A.Compose([
+                A.transforms.PadIfNeeded(min_width=args.input_width, min_height=args.input_height, border_mode=cv2.BORDER_CONSTANT, value=0),
+                A.CenterCrop(width=args.input_width, height=args.input_height),
+                A.Normalize(mean=args.mean, std=args.std),
+                ToTensorV2(),
+            ])
+
             root_dir_val = os.path.expanduser(args.val_dir)
             ann_path_val = os.path.expanduser(args.val_ann)
             depth_dir_val = os.path.expanduser(args.val_depth) if args.val_depth is not None else None
-            dataset_val = CocoSegmentationAlb(root=root_dir_val, annFile=ann_path_val, depthDir=depth_dir_val, transform=transform)
+            dataset_val = CocoSegmentationAlb(root=root_dir_val, annFile=ann_path_val, depthDir=depth_dir_val, transform=transform_val)
             coco_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=lambda x: x, num_workers=args.num_workers)
         else:
             coco_val = None
@@ -205,7 +211,6 @@ if __name__ == '__main__':
 
             # Transform for eval
             transform = A.Compose([
-                A.LongestMaxSize(max_size=args.input_width, interpolation=cv2.INTER_LINEAR),
                 A.transforms.PadIfNeeded(min_width=args.input_width, min_height=args.input_height, border_mode=cv2.BORDER_CONSTANT, value=0),
                 A.CenterCrop(width=args.input_width, height=args.input_height),
                 A.Normalize(mean=args.mean, std=args.std),
