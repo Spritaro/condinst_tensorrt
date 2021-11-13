@@ -4,6 +4,12 @@ This repository is an unofficial implementation of [CondInst: Conditional Convol
 
 This implementation utilizes heatmap-based object detection. Please see [CornerNet: Detecting Objects as Paired Keypoints](https://arxiv.org/abs/1808.01244) and [CenterNet: Objects as Points](https://arxiv.org/abs/1904.07850) for details.
 
+## Benchmark
+
+| Backbone | Dataset | Input image size | Output mask size | mAP | FP16 inference time<br>Jetson Nano 4GB | FP16 inference time<br>Jetson Xavier NX | Download link |
+| ---      | ---     | ---              | ---              | --- | ---                  | ---                 | ---           |
+| ResNet50-FPN | COCO2017 | 640x480 | 160x120 | 20.1 | 406 ms | 57.8 ms | [weight](https://drive.google.com/file/d/1oO6G_LlUyTwOjsI_sElxhLa7Yv82J-qo/view?usp=sharing), [onnx](https://drive.google.com/file/d/1WglUK8_Q9F8_jFf-dfy9VZaZo98Ue-3M/view?usp=sharing) |
+
 ## Setup
 
 - Build docker image.
