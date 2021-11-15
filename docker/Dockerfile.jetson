@@ -36,7 +36,7 @@ RUN wget https://bootstrap.pypa.io/get-pip.py && \
 # Install pytorch-lightning
 RUN pip3 install \
     pytorch-lightning \
-    albumentations==0.5.2
+    albumentations==1.1.0
 
 # Reinstall OpenCV
 RUN pip3 uninstall -y opencv-python && pip3 install opencv-python

@@ -41,7 +41,7 @@ RUN pip3 install \
     torchvision==0.10.0+cu111 \
     -f https://download.pytorch.org/whl/torch_stable.html
 RUN pip3 install \
-    albumentations==0.5.2 \
+    albumentations==1.1.0 \
     pytorch-lightning
 
 # Reinstall OpenCV
