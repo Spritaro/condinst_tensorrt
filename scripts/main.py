@@ -85,6 +85,8 @@ parser_test.add_argument('--test_image_dir', type=str, default='../test_image', 
 parser_test.add_argument('--test_depth_dir', type=str, default=None, help="path to test image dir (required only when input_channels=4)")
 parser_test.add_argument('--test_output_dir', type=str, default='../test_output', help="path to test output dir (default '../test_output')")
 parser_test.add_argument('--load_model', type=str, default='../models/model.pt', help="path to trained model (default '../models/model.py')")
+# Logging options
+parser_test.add_argument('--tensorboard_log_dir', type=str, default='../runs', help="path to TensorBoard log dir (default '../runs')")
 
 # Create parser for "export" command
 parser_export = subparsers.add_parser('export', help="export model to ONNX format")
@@ -244,6 +246,8 @@ if __name__ == '__main__':
 
         elif args.command == 'test':
 
+            result_images = []
+
             # Get list of image paths
             image_paths = glob.glob(os.path.join(args.test_image_dir, '*.jpg'))
             image_paths += glob.glob(os.path.join(args.test_image_dir, '*.jpeg'))
@@ -329,6 +333,23 @@ if __name__ == '__main__':
                 print("Saving to {}".format(save_path))
                 os.makedirs(args.test_output_dir, exist_ok=True)
                 cv2.imwrite(save_path, image_visualize)
+
+                result_images.append(image_visualize)
+
+            # Show result images on TensorBoard
+            log_dirs = glob.glob(os.path.join(args.tensorboard_log_dir, "default", "*"))
+            if len(log_dirs) > 0:
+                from torch.utils.tensorboard import SummaryWriter
+                log_dirs.sort(key=os.path.getctime)
+                writer = SummaryWriter(log_dirs[-1])
+
+                x = np.stack(result_images, axis=0)
+                x = np.transpose(x, axes=[0, 3, 1, 2])
+                x = torch.from_numpy(x.astype(np.uint8)).clone()
+                img_grid = torchvision.utils.make_grid(x)
+
+                writer.add_image("test_results", img_grid)
+                writer.close()
 
         else:
 
