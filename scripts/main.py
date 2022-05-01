@@ -57,7 +57,7 @@ parser_train.add_argument('--num_workers', type=int, default=4, help="number of 
 parser_train.add_argument('--resume_from_checkpoint', type=str, default=None, help="path to checkpoint file (optional)")
 parser_train.add_argument('--max_epochs', type=int, default=10, help="number of epochs (default 10")
 parser_train.add_argument('--gpus', type=int, default=1, help="number of GPUs to train (0 for CPU, -1 for all GPUs) (default 1)")
-parser_train.add_argument('--learning_rate', type=float, default=0.01, help="learning rate (default 0.01)")
+parser_train.add_argument('--learning_rate', type=float, default=1e-5, help="learning rate (default 1e-5)")
 # Logging options
 parser_train.add_argument('--tensorboard_log_dir', type=str, default='../runs', help="path to TensorBoard log dir (default '../runs')")
 # Output options
