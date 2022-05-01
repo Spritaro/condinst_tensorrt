@@ -80,6 +80,8 @@ class Decoder(nn.Module):
 
         self.class_head = nn.Sequential(
             nn.Linear(self.num_channels, self.num_classes))
+        self.score_head = nn.Sequential(
+            nn.Linear(self.num_channels, 1))
         self.kernel_head = nn.Sequential(
             nn.Linear(self.num_channels, self.num_channels))
         # TODO: add score head
@@ -110,12 +112,13 @@ class Decoder(nn.Module):
 
         # Heads
         class_logits = self.class_head(inst_aware_feature) # [batch, N, C]
+        score_logits = self.score_head(inst_aware_feature) # [batch, N, 1]
         kernel_logits = self.kernel_head(inst_aware_feature) # [batch, N, D]
 
         # Masks
         mask_preds = self.generate_mask(kernel_logits, mask_feature)
 
-        return class_logits, mask_preds
+        return class_logits, score_logits, mask_preds
 
     def generate_mask(self, kernel_logits, mask_feature):
         """
@@ -205,14 +208,16 @@ class SparseInst(nn.Module):
 
         feature = self.encoder(c3, c4, c5) # 1/8
         feature = self.add_coordinate(feature)
-        class_logits, mask_preds = self.decoder(feature)
+        class_logits, score_logits, mask_preds = self.decoder(feature)
 
         if self.mode == 'training':
-            return class_logits, mask_preds
+            return class_logits, score_logits, mask_preds
         else:
-            class_preds = torch.sigmoid(class_logits)
-            labels = torch.argmax(class_preds, dim=2)
-            return labels.int(), class_preds.float(), mask_preds.float()
+            class_preds = torch.sigmoid(class_logits) # classification predictions
+            score_preds = torch.sigmoid(score_logits) # objectness score predictions
+            scores = torch.sqrt(class_preds * score_preds)
+            labels = torch.argmax(scores, dim=2)
+            return labels.int(), scores.float(), mask_preds.float()
 
     def add_coordinate(self, feature):
         batch, D, H, W = feature.shape
@@ -231,11 +236,11 @@ class SparseInst(nn.Module):
         feature = torch.cat([feature, coord_x, coord_y], dim=1)
         return feature
 
-    def loss(self, class_logits, mask_preds, targets):
-        # TODO: add score loss
+    def loss(self, class_logits, score_logits, mask_preds, targets):
         """
         Params:
             class_logits: Tensor[batch, N, C]
+            score_logits: Tensor[batch, N, 1]
             mask_preds: Tensor[batch, N, H, W]
             targets: List[List[Dict{'class_labels': int, 'segmentation': ndarray[imageH, imageW]}]]
         Returns:
@@ -252,17 +257,21 @@ class SparseInst(nn.Module):
 
         # For each batch
         class_losses = []
+        score_losses = []
         mask_losses = []
         for batch_idx in range(batch):
             K = len(targets[batch_idx]) # num_targets
 
             c = class_logits[batch_idx] # [N, C]
+            s = score_logits[batch_idx] # [N, 1]
             m = mask_preds[batch_idx] # [N, H, W]
 
             if K == 0:
                 # Calculate background loss
                 class_loss = self.calculate_bg_class_loss(c)
                 class_losses.append(class_loss)
+                score_loss = torch.as_tensor(0.0, dtype=dtype, device=device)
+                score_losses.append(score_loss)
                 mask_loss = torch.as_tensor(0.0, dtype=dtype, device=device)
                 mask_losses.append(mask_loss)
                 continue
@@ -280,13 +289,17 @@ class SparseInst(nn.Module):
             class_loss = self.calculate_class_loss(assigned_inst_idxs, assigned_target_idxs, c, label_targets)
             class_losses.append(class_loss)
 
+            # Calculate score loss
+            score_loss = self.calculate_score_loss(assigned_inst_idxs, assigned_target_idxs, s, m, mask_targets)
+            score_losses.append(score_loss)
+
             # Calculate mask loss
             mask_loss = self.calculate_mask_loss(assigned_inst_idxs, assigned_target_idxs, m, mask_targets)
             mask_losses.append(mask_loss)
 
         class_loss = torch.stack(class_losses).mean()
         mask_loss = torch.stack(mask_losses).mean()
-        return class_loss, mask_loss
+        return class_loss, score_loss, mask_loss
 
     def generate_score_matrix(self, class_logits, mask_preds, label_targets, mask_targets, alpha=0.8, eps=1e-3):
         """
@@ -402,6 +415,28 @@ class SparseInst(nn.Module):
         stack_class_targets = torch.stack(list_class_targets) # [N, C]
         class_loss = sigmoid_focal_loss(class_logits, stack_class_targets, alpha=0.2, reduction="mean")
         return class_loss
+
+    def calculate_score_loss(self, inst_idxs, target_idxs, score_logits, mask_preds, mask_targets, eps=1e-3):
+        """
+        Params:
+            inst_idxs: List of length min(N, K)
+            target_idxs: List of length min(N, K)
+            score_logits: Tensor[N, 1]
+            mask_preds: Tensor[N, maskH, maskW]
+            mask_targets: Tensor[K, maskH, maskW]
+            eps: float
+        Returns:
+            class_loss: Tensor[]
+        """
+        stack_score_logits = score_logits[inst_idxs,:].view(-1) # [min(N, K)]
+        stack_mask_preds = mask_preds[inst_idxs,:,:] # [min(N, K), maskH, maskW]
+        stack_mask_targets = mask_targets[target_idxs,:,:] # [min(N, K), maskH, maskW]
+        # NOTE: In the original paper, IoU is used instead of mask-IoU
+        intersection = (stack_mask_preds * stack_mask_targets).sum(dim=(1,2))
+        union = stack_mask_preds.sum(dim=(1,2)) + stack_mask_targets.sum(dim=(1,2)) - intersection
+        score_target = intersection / (union + eps)
+        score_loss = F.binary_cross_entropy_with_logits(stack_score_logits, score_target.detach(), reduction='mean')
+        return score_loss
 
     def calculate_mask_loss(self, inst_idxs, target_idxs, mask_preds, mask_targets):
         """

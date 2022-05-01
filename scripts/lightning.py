@@ -8,13 +8,16 @@ from mean_average_precision import MeanAveragePrecision
 
 class LitSparseInst(pl.LightningModule):
     def __init__(self, mode, input_channels, num_classes, num_instances,
-                learning_rate, score_threshold=0.3, mask_threshold=0.5, class_loss_factor=1.0):
+                learning_rate, score_threshold=0.3, mask_threshold=0.5,
+                class_loss_factor=2.0, score_loss_factor=1.0, mask_loss_factor=4.0):
         super().__init__()
         self.num_instances = num_instances
         self.learning_rate = learning_rate
         self.score_threshold = score_threshold
         self.mask_threshold = mask_threshold
         self.class_loss_factor = class_loss_factor
+        self.score_loss_factor = score_loss_factor
+        self.mask_loss_factor = mask_loss_factor
 
         self.sparseinst = SparseInst(mode, input_channels, num_classes, num_instances)
 
@@ -33,15 +36,18 @@ class LitSparseInst(pl.LightningModule):
         targets = [tgt for _, tgt in batch]
         images = torch.stack(images, dim=0)
 
-        class_logits, mask_preds = self(images)
-        class_loss, mask_loss = self.sparseinst.loss(class_logits, mask_preds, targets)
-        loss = self.class_loss_factor * class_loss + mask_loss
+        class_logits, score_logits, mask_preds = self(images)
+        class_loss, score_loss, mask_loss = self.sparseinst.loss(class_logits, score_logits, mask_preds, targets)
+        loss = (self.class_loss_factor * class_loss +
+                self.score_loss_factor * score_loss +
+                self.mask_loss_factor * mask_loss)
 
         # TensorBoard
         if batch_idx % self.trainer.accumulate_grad_batches == 0:
             # Display loss
             tensorboard = self.logger.experiment
             tensorboard.add_scalar("class_loss", class_loss, self.global_step)
+            tensorboard.add_scalar("score_loss", score_loss, self.global_step)
             tensorboard.add_scalar("mask_loss", mask_loss, self.global_step)
             tensorboard.add_scalar("loss", loss, self.global_step)
             # Display masks
@@ -58,13 +64,16 @@ class LitSparseInst(pl.LightningModule):
         targets = [tgt for _, tgt in batch]
         images = torch.stack(images, dim=0)
 
-        class_logits, mask_preds = self(images)
-        class_loss, mask_loss = self.sparseinst.loss(class_logits, mask_preds, targets)
-        loss = self.class_loss_factor * class_loss + mask_loss
+        class_logits, score_logits, mask_preds = self(images)
+        class_loss, score_loss, mask_loss = self.sparseinst.loss(class_logits, score_logits, mask_preds, targets)
+        loss = (self.class_loss_factor * class_loss +
+                self.score_loss_factor * score_loss +
+                self.mask_loss_factor * mask_loss)
 
         # TensorBoard
         tensorboard = self.logger.experiment
         tensorboard.add_scalar("val_class_loss", class_loss, self.global_step)
+        tensorboard.add_scalar("val_score_loss", score_loss, self.global_step)
         tensorboard.add_scalar("val_mask_loss", mask_loss, self.global_step)
         tensorboard.add_scalar("val_loss", loss, self.global_step)
 
