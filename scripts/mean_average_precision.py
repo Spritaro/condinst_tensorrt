@@ -7,7 +7,7 @@ def calc_mask_ious(labels, scores, masks, targets, score_threshold, mask_thresho
         labels: Tensor[num_batch, topk]
         scores: Tensor[num_batch, topk]
         masks: Tensor[num_batch, topk, mask_height, mask_width]
-        targets: List[List[Dict{'class_labels': int, 'segmentations': Tensor[image_height, image_width]}]]
+        targets: List[List[Dict{'class_labels': int, 'segmentation': Tensor[image_height, image_width]}]]
         score_threshold: Float
         mask_threshold: Float
     Returns:
@@ -103,7 +103,7 @@ class MeanAveragePrecision(object):
             labels: Tensor[num_batch, topk]
             scores: Tensor[num_batch, topk]
             masks: Tensor[num_batch, topk, mask_height, mask_width]
-            targets: List[List[Dict{'class_labels': int, 'segmentations': Tensor[image_height, image_width]}]]
+            targets: List[List[Dict{'class_labels': int, 'segmentation': Tensor[image_height, image_width]}]]
         Returns:
             None
         """

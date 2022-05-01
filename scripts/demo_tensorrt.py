@@ -9,7 +9,7 @@ import pycuda.autoinit
 import pycuda.driver as cuda
 import tensorrt as trt
 
-class CondInst(object):
+class SparseInst(object):
 
     def __init__(self, filepath):
 
@@ -108,7 +108,7 @@ def infer_and_visualize(image):
         image_normalized = rgbd
 
     # Perform inference
-    labels, probs, masks, t = condinst.infer(image_normalized)
+    labels, probs, masks, t = sparseinst.infer(image_normalized)
     print("Inference time {} s".format(t))
 
     # Postprocessing
@@ -151,7 +151,7 @@ if __name__ == '__main__':
 
     # Load TensorRT engine
     print("loading TensorRT engine")
-    condinst = CondInst(args.load_engine)
+    sparseinst = SparseInst(args.load_engine)
 
     if args.camera:
 

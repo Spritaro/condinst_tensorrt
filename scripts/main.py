@@ -18,7 +18,7 @@ import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from lightning import LitCondInst
+from lightning import LitSparseInst
 from dataset import CocoSegmentationAlb
 
 parser = argparse.ArgumentParser(description="Parameters for training and inference")
@@ -29,7 +29,7 @@ parser.add_argument('--input_width', type=int, default=640, required=False, help
 parser.add_argument('--input_height', type=int, default=480, help="height of input image (default 480)")
 parser.add_argument('--input_channels', type=int, default=3, choices=[3, 4], help="number of input channels (default 3)")
 parser.add_argument('--num_classes', type=int, default=80, help="number of classes (default 80)")
-parser.add_argument('--topk', type=int, default=40, help="max number of object to detect during inference (default 40)")
+parser.add_argument('--num_instances', type=int, default=40, help="max number of instances to detect during inference (default 40)")
 parser.add_argument('--mixed_precision', type=bool, default=True, help="allow FP16 training (default True)")
 
 # Pre-processing options
@@ -149,11 +149,11 @@ if __name__ == '__main__':
         )
 
         # Create model for training
-        model = LitCondInst(
+        model = LitSparseInst(
             mode='training',
             input_channels=args.input_channels,
             num_classes=args.num_classes,
-            topk=args.topk,
+            num_instances=args.num_instances,
             learning_rate=args.learning_rate,
             score_threshold=args.score_threshold,
             mask_threshold=args.mask_threshold)
@@ -175,16 +175,21 @@ if __name__ == '__main__':
         os.makedirs(args.tensorboard_log_dir, exist_ok=True)
         tb_logger = pl_loggers.TensorBoardLogger(save_dir=args.tensorboard_log_dir, default_hp_metric=False)
 
+        # Profiler
+        profiler = pl.profiler.AdvancedProfiler()
+
         # Train model
         trainer = pl.Trainer(
             max_epochs=args.max_epochs,
+            # max_steps=10,
             gpus=args.gpus,
             val_check_interval=1.0, # validate once per epoch
             accumulate_grad_batches=args.accumulate_grad_batches,
             callbacks=[checkpoint_callback],
             resume_from_checkpoint=args.resume_from_checkpoint,
             precision=precision,
-            logger=tb_logger
+            logger=tb_logger,
+            profiler=profiler
         )
         trainer.fit(model, coco_train, coco_val)
 
@@ -196,11 +201,11 @@ if __name__ == '__main__':
 
         # Load model for eval or test or export
         print("Loading model")
-        model = LitCondInst(
+        model = LitSparseInst(
             mode='inference',
             input_channels=args.input_channels,
             num_classes=args.num_classes,
-            topk=args.topk,
+            num_instances=args.num_instances,
             score_threshold=args.score_threshold,
             mask_threshold=args.mask_threshold)
         model.load_state_dict(torch.load(args.load_model))

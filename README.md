@@ -1,34 +1,34 @@
-# Unofficial Implementation of CondInst for TensorRT
+# Unofficial Implementation of SparseInst for TensorRT
 
-This repository is an unofficial implementation of [CondInst: Conditional Convolutions for Instance Segmentation](https://arxiv.org/abs/2003.05664).
+This is an unofficial implementation of [Sparse Inst: Sparse Instance Activation for Real-Time Instance Segmentation](https://arxiv.org/abs/2203.12827).
 
-This implementation utilizes heatmap-based object detection. Please see [CornerNet: Detecting Objects as Paired Keypoints](https://arxiv.org/abs/1808.01244) and [CenterNet: Objects as Points](https://arxiv.org/abs/1904.07850) for details.
+Please note that this is not a faithful implementation of the paper.
 
 ## Benchmark
 
 | Backbone | Dataset | Input image size | Output mask size | mAP | FP16 inference time<br>Jetson Nano 4GB | FP16 inference time<br>Jetson Xavier NX | Download link |
 | ---      | ---     | ---              | ---              | --- | ---                  | ---                 | ---           |
-| ResNet50-FPN | COCO2017 | 640x480 | 160x120 | 20.1 | 406 ms | 57.8 ms | [weight](https://drive.google.com/file/d/1oO6G_LlUyTwOjsI_sElxhLa7Yv82J-qo/view?usp=sharing), [onnx](https://drive.google.com/file/d/1WglUK8_Q9F8_jFf-dfy9VZaZo98Ue-3M/view?usp=sharing) |
+| ResNet50-FPN | COCO2017 | 640x480 | ???x??? | ??? | ??? ms | ??? ms | weight, onnx |
 
 ## Setup
 
 - Build docker image.
     ```sh
     $ cd docker
-    $ docker build -t condinst_tensorrt -f Dockerfile.tensorrt .
+    $ docker build -t sparseinst_tensorrt -f Dockerfile.tensorrt .
     ```
 
 - To build docker image without TensorRT, run the following command instead.
 
     ```sh
     $ cd docker
-    $ docker build -t condinst_tensorrt .
+    $ docker build -t sparseinst_tensorrt .
     ```
 
 - To build docker image on Jetson, run the following command.
     ```sh
     $ cd docker
-    $ docker build -t condinst_tensorrt -f Dockerfile.jetson .
+    $ docker build -t sparseinst_tensorrt -f Dockerfile.jetson .
     ```
 
 ## Usage
