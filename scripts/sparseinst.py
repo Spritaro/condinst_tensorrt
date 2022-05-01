@@ -107,7 +107,7 @@ class Decoder(nn.Module):
         # Instance aware feature
         inst_feature = inst_feature.view(batch, self.num_channels, -1) # [batch, D, (H*W)]
         inst_feature = torch.transpose(inst_feature, 1, 2) # [batch, (H*W), D]
-        inst_aware_feature = torch.bmm(iam, inst_feature) # [batch, N, D]
+        inst_aware_feature = torch.matmul(iam, inst_feature) # [batch, N, D] = [batch, N, (H*W)] * [batch, (H*W), D]
 
         # Heads
         class_logits = self.class_head(inst_aware_feature) # [batch, N, C]
@@ -129,30 +129,14 @@ class Decoder(nn.Module):
         batch, N, D = kernel_logits.shape
         _, _, H, W = mask_feature.shape
 
-        kernel_logits = kernel_logits.view(batch*N, 1, D, 1) # [(batch*N), 1, D, 1]
+        m = mask_feature.view(batch, 1, D, 1, -1) # [batch, 1, D, 1, (H*W)]
+        m = m.transpose(2, 4) # [batch, 1, (H*W), 1, D]
 
-        mask_feature = mask_feature.view(batch, D, 1, -1) # [batch, D, 1, (H*W)]
-        mask_feature = mask_feature.transpose(1, 3) # [(batch), (H*W), 1, D]
-        mask_feature = mask_feature.repeat(N, 1, 1, 1) # [(batch*N), (H*W), 1, D]
+        w = kernel_logits.view(batch, N, 1, D, 1) # [batch, N, 1, D, 1]
 
-        mask_logits = torch.matmul(mask_feature, kernel_logits) # [(batch*N), (H*W), 1, 1] = [(batch*N), (H*W), 1, D] * [(batch*N), 1, D, 1]
-
+        mask_logits = torch.matmul(m, w) # [batch, N, (H*W), 1, 1] = [batch, 1, (H*W), 1, D] * [batch, N, 1, D, 1]
         mask_logits = mask_logits.view(batch, -1, H, W) # Tensor[batch, N, H, W]
         mask_preds = torch.sigmoid(mask_logits)
-
-        # mask_logits = []
-        # for batch_idx in range(batch):
-        #     w = kernel_logits[batch_idx].view(N, 1, D, 1) # [N, 1, D, 1]
-
-        #     m = mask_feature[batch_idx].view(1, D, 1, -1) # [1, D, 1, (H*W)]
-        #     m = m.transpose(1, 3) # [1, (H*W), 1, D]
-        #     m = m.repeat(N, 1, 1, 1) # [N, (H*W), 1, D]
-
-        #     mask_logit = torch.matmul(m, w) # [N, (H*W), 1, 1] = [N, (H*W), 1, D] * [N, 1, D, 1]
-        #     mask_logit = mask_logit.view(1, -1, H, W) # Tensor[1, N, H, W]
-        #     mask_logits.append(mask_logit)
-        # mask_logits = torch.cat(mask_logits, dim=0) # Tensor[batch, N, H, W]
-        # mask_preds = torch.sigmoid(mask_logits)
 
         return mask_preds
 
