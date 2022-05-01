@@ -259,8 +259,8 @@ class SparseInst(nn.Module):
         dtype = class_logits.dtype
         device = class_logits.device
 
-        # Upsample masks
-        mask_preds = F.interpolate(mask_preds, scale_factor=8, mode='bilinear', align_corners=False) # [batch, N, imageH, imageW]
+        # Upsample masks to 1/4 of input size
+        mask_preds = F.interpolate(mask_preds, scale_factor=2, mode='bilinear', align_corners=False) # [batch, N, maskH, maskW]
 
         # For each batch
         class_losses = []
@@ -282,6 +282,9 @@ class SparseInst(nn.Module):
             label_targets = torch.as_tensor([targets[batch_idx][target_idx]['class_labels'] for target_idx in range(K)], dtype=torch.long, device=device) # [K]
             mask_targets = torch.stack([torch.from_numpy(targets[batch_idx][target_idx]['segmentation']).to(dtype).to(device) for target_idx in range(K)]) # [K, imageH, imageW]
 
+            # Downsample target mask to 1/4 of input size
+            mask_targets = F.avg_pool2d(mask_targets, kernel_size=4, stride=4, padding=0) # [batch, N, maskH, maskW]
+
             score_matrix = self.generate_score_matrix(c, m, label_targets, mask_targets) # [N, K]
             assigned_inst_idxs, assigned_target_idxs = self.assign_targets_to_instances(score_matrix) # List of length min(N, K)
 
@@ -301,15 +304,15 @@ class SparseInst(nn.Module):
         """
         Params:
             class_logits: Tensor[N, C]
-            mask_preds: Tensor[N, imageH, imageW]
+            mask_preds: Tensor[N, maskH, maskW]
             label_targets: Tensor[K]
-            mask_targets: Tensor[K, imageH, imageW]
+            mask_targets: Tensor[K, maskH, maskW]
             alpha: weighting factor to balance class vs mask
             eps:
         Returns:
             score_matrix: ndarray[N, K]
         """
-        N, imageH, imageW = mask_preds.shape
+        N, _, _ = mask_preds.shape
         K, _, _ = mask_targets.shape
         device = class_logits.device
 
@@ -324,8 +327,8 @@ class SparseInst(nn.Module):
                 list_mask_preds.append(mask_preds[inst_idx,:,:])
                 list_mask_targets.append(mask_targets[target_idx,:,:])
         stack_class_preds = torch.stack(list_class_preds) # [(N*K)]
-        stack_mask_preds = torch.stack(list_mask_preds) # [(N*K), imageH, imageW]
-        stack_mask_targets = torch.stack(list_mask_targets) # [(N*K), imageH, imageW]
+        stack_mask_preds = torch.stack(list_mask_preds) # [(N*K), maskH, maskW]
+        stack_mask_targets = torch.stack(list_mask_targets) # [(N*K), maskH, maskW]
 
         score = stack_class_preds**(1-alpha) * dice(stack_mask_preds, stack_mask_targets)**alpha # [(N*K)]
         score_matrix = score.view(N, K)
@@ -417,12 +420,12 @@ class SparseInst(nn.Module):
         Params:
             inst_idxs: List of length min(N, K)
             target_idxs: List of length min(N, K)
-            mask_preds: Tensor[N, imageH, imageW]
-            mask_targets: Tensor[K, imageH, imageW]
+            mask_preds: Tensor[N, maskH, maskW]
+            mask_targets: Tensor[K, maskH, maskW]
         Returns:
             class_loss: Tensor[]
         """
-        stack_mask_preds = mask_preds[inst_idxs,:,:] # [min(N, K), imageH, imageW]
-        stack_mask_targets = mask_targets[target_idxs,:,:] # [min(N, K), imageH, imageW]
+        stack_mask_preds = mask_preds[inst_idxs,:,:] # [min(N, K), maskH, maskW]
+        stack_mask_targets = mask_targets[target_idxs,:,:] # [min(N, K), maskH, maskW]
         mask_loss = dice_loss(stack_mask_preds, stack_mask_targets) # [min(N, K)]
         return mask_loss.mean()
