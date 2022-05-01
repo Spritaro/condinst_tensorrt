@@ -13,8 +13,8 @@ def dice(inputs, targets, smooth=1.0):
     inputs = inputs.view(N, -1)
     targets = targets.view(N, -1)
 
-    dice = (2 * (inputs*targets).sum(dim=1) + smooth) / ((inputs**2).sum(dim=1) + (targets**2).sum(dim=1) + smooth)
-    return dice
+    dice_ = (2 * (inputs*targets).sum(dim=1) + smooth) / ((inputs**2).sum(dim=1) + (targets**2).sum(dim=1) + smooth)
+    return dice_
 
 def dice_loss(inputs, targets, smooth=1.0):
     """
