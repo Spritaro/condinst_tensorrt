@@ -76,7 +76,6 @@ class Decoder(nn.Module):
 
         self.f_iam = nn.Sequential(
             nn.Conv2d(in_channels=self.num_channels, out_channels=self.num_instances, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(num_features=self.num_instances),
             nn.Sigmoid())
 
         self.class_head = nn.Sequential(
