@@ -299,6 +299,7 @@ class SparseInst(nn.Module):
             mask_losses.append(mask_loss)
 
         class_loss = torch.stack(class_losses).mean()
+        score_loss = torch.stack(score_losses).mean()
         mask_loss = torch.stack(mask_losses).mean()
         return class_loss, score_loss, mask_loss
 
