@@ -102,7 +102,7 @@ class Decoder(nn.Module):
         # Instance activation map
         iam = self.f_iam(inst_feature) # [batch, N, H, W]
         iam = iam.view(batch, self.num_instances, -1) # [batch, N, (H*W)]
-        iam = nn.functional.normalize(iam, p=2.0, dim=2)
+        iam = nn.functional.normalize(iam, p=1.0, dim=2)
 
         # Instance aware feature
         inst_feature = inst_feature.view(batch, self.num_channels, -1) # [batch, D, (H*W)]
