@@ -9,7 +9,7 @@ from mean_average_precision import MeanAveragePrecision
 class LitSparseInst(pl.LightningModule):
     def __init__(self, mode, input_channels, num_classes, num_instances,
                 learning_rate, score_threshold=0.3, mask_threshold=0.5,
-                class_loss_factor=2.0, score_loss_factor=1.0, mask_loss_factor=4.0):
+                class_loss_factor=2.0, score_loss_factor=1.0, mask_loss_factor=2.0):
         super().__init__()
         self.num_instances = num_instances
         self.learning_rate = learning_rate
@@ -36,8 +36,8 @@ class LitSparseInst(pl.LightningModule):
         targets = [tgt for _, tgt in batch]
         images = torch.stack(images, dim=0)
 
-        class_logits, score_logits, mask_preds = self(images)
-        class_loss, score_loss, mask_loss = self.sparseinst.loss(class_logits, score_logits, mask_preds, targets)
+        class_logits, score_logits, mask_logits = self(images)
+        class_loss, score_loss, mask_loss = self.sparseinst.loss(class_logits, score_logits, mask_logits, targets)
         loss = (self.class_loss_factor * class_loss +
                 self.score_loss_factor * score_loss +
                 self.mask_loss_factor * mask_loss)
@@ -51,6 +51,7 @@ class LitSparseInst(pl.LightningModule):
             tensorboard.add_scalar("mask_loss", mask_loss, self.global_step)
             tensorboard.add_scalar("loss", loss, self.global_step)
             # Display masks
+            mask_preds = torch.sigmoid(mask_logits)
             images_and_masks = self.concat_images_and_masks(images[:,:3,:,:], class_logits, mask_preds)
             img_grid = torchvision.utils.make_grid(images_and_masks, nrow=images.shape[0])
             tensorboard.add_image('images', img_grid, global_step=self.global_step)
@@ -64,8 +65,8 @@ class LitSparseInst(pl.LightningModule):
         targets = [tgt for _, tgt in batch]
         images = torch.stack(images, dim=0)
 
-        class_logits, score_logits, mask_preds = self(images)
-        class_loss, score_loss, mask_loss = self.sparseinst.loss(class_logits, score_logits, mask_preds, targets)
+        class_logits, score_logits, mask_logits = self(images)
+        class_loss, score_loss, mask_loss = self.sparseinst.loss(class_logits, score_logits, mask_logits, targets)
         loss = (self.class_loss_factor * class_loss +
                 self.score_loss_factor * score_loss +
                 self.mask_loss_factor * mask_loss)
