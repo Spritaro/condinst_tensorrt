@@ -439,42 +439,9 @@ class SparseInst(nn.Module):
         stack_mask_targets = mask_targets[target_idxs,:,:] # [min(N, K), maskH, maskW]
 
         # Mask-IoU
-        # intersection = (stack_mask_preds * stack_mask_targets).sum(dim=(1,2))
-        # union = stack_mask_preds.sum(dim=(1,2)) + stack_mask_targets.sum(dim=(1,2)) - intersection
-        # score_target = intersection / (union + eps)
-
-        # Bbox-IoU
-        coord_x = torch.arange(0, maskW, 1, dtype=torch.int32, device=device).view(1, maskW) # [1, maskW]
-        coord_y = torch.arange(0, maskH, 1, dtype=torch.int32, device=device).view(1, maskH) # [1, maskH]
-
-        def convert_masks_to_boxes(masks):
-            masks_b = (masks > 0.51).to(torch.int32) # [min(N, K), maskH, maskW]
-            masks_bx = (masks_b.sum(dim=1) > 0).to(torch.int32) # [min(N, K), maskW]
-            masks_by = (masks_b.sum(dim=2) > 0).to(torch.int32) # [min(N, K), maskH]
-            masks_coord_x = masks_bx * coord_x
-            masks_coord_y = masks_by * coord_y
-            maxx, _ = torch.max(masks_coord_x, dim=1) # [min(N, K)]
-            maxy, _ = torch.max(masks_coord_y, dim=1) # [min(N, K)]
-            minx, _ = torch.min(masks_coord_x - masks_bx * maskW, dim=1) # [min(N, K)]
-            miny, _ = torch.min(masks_coord_y - masks_by * maskH, dim=1) # [min(N, K)]
-            minx += maskW
-            miny += maskH
-            boxes = torch.stack([minx, miny, maxx, maxy], dim=1)
-            return boxes
-
-        box_preds = convert_masks_to_boxes(stack_mask_preds)
-        box_targets = convert_masks_to_boxes(stack_mask_targets)
-
-        def calculate_iou(boxes1, boxes2):
-            lt = torch.maximum(boxes1[:, :2], boxes2[:, :2])  # [min(N, K), 2]
-            rb = torch.minimum(boxes1[:, 2:], boxes2[:, 2:])  # [min(N, K), 2]
-            intersection_areas = (rb[:, 0] - lt[:, 0]) * (rb[:, 1] - lt[:, 1])
-            areas1 = (boxes1[:, 2] - boxes1[:, 0]) * (boxes1[:, 3] - boxes1[:, 1])
-            areas2 = (boxes2[:, 2] - boxes2[:, 0]) * (boxes2[:, 3] - boxes2[:, 1])
-            iou = intersection_areas / (areas1 + areas2 - intersection_areas + eps) # [min(N, K)]
-            return iou
-
-        score_target = calculate_iou(box_preds, box_targets)
+        intersection = (stack_mask_preds * stack_mask_targets).sum(dim=(1,2))
+        union = stack_mask_preds.sum(dim=(1,2)) + stack_mask_targets.sum(dim=(1,2)) - intersection
+        score_target = intersection / (union + eps)
 
         score_loss = F.binary_cross_entropy_with_logits(stack_score_logits, score_target.detach(), reduction='mean')
         return score_loss
