@@ -75,7 +75,7 @@ class Decoder(nn.Module):
         self.mask_branch = conv3x3_bn_relu(self.num_channels*3+2, self.num_channels, num_stack=4)
 
         self.f_iam = nn.Sequential(
-            nn.Conv2d(in_channels=self.num_channels, out_channels=self.num_instances, kernel_size=3, padding=1, bias=False),
+            nn.Conv2d(in_channels=self.num_channels, out_channels=self.num_instances, kernel_size=3, padding=1, bias=True),
             nn.Sigmoid())
 
         self.class_head = nn.Sequential(
