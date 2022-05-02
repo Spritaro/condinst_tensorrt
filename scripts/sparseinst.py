@@ -156,11 +156,11 @@ class SparseInst(nn.Module):
         self.encoder = Encoder(self.num_channels)
         self.decoder = Decoder(self.num_classes, self.num_instances, self.num_channels)
 
-        def freeze_bn(m):
-            if isinstance(m, nn.BatchNorm2d):
-                assert(hasattr(m, 'track_running_stats'))
-                m.track_running_stats = False
-        self.backbone.apply(freeze_bn)
+        # def freeze_bn(m):
+        #     if isinstance(m, nn.BatchNorm2d):
+        #         assert(hasattr(m, 'track_running_stats'))
+        #         m.track_running_stats = False
+        # self.backbone.apply(freeze_bn)
 
         # def initialize(m):
         #     if isinstance(m, nn.Conv2d):
