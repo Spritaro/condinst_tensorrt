@@ -1,6 +1,6 @@
 import torch
 
-def dice(inputs, targets, smooth=1.0):
+def dice(inputs, targets, smooth=1e-3):
     """
     Params:
         inputs: Tensor[N, *]
