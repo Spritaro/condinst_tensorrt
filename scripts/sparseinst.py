@@ -84,7 +84,6 @@ class Decoder(nn.Module):
             nn.Linear(self.num_channels, 1))
         self.kernel_head = nn.Sequential(
             nn.Linear(self.num_channels, self.num_channels))
-        # TODO: add score head
         return
 
     def forward(self, feature):
