@@ -163,20 +163,20 @@ class SparseInst(nn.Module):
                 m.track_running_stats = False
         self.backbone.apply(freeze_bn)
 
-        def initialize(m):
-            if isinstance(m, nn.Conv2d):
-                nn.init.normal_(m.weight, std=0.01)
-                if m.bias is not None:
-                    nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.Linear):
-                nn.init.normal_(m.weight, std=0.01)
-                if m.bias is not None:
-                    nn.init.constant_(m.bias, 0)
-        self.encoder.apply(initialize)
-        self.decoder.apply(initialize)
+        # def initialize(m):
+        #     if isinstance(m, nn.Conv2d):
+        #         nn.init.normal_(m.weight, std=0.01)
+        #         if m.bias is not None:
+        #             nn.init.constant_(m.bias, 0)
+        #     elif isinstance(m, nn.BatchNorm2d):
+        #         nn.init.constant_(m.weight, 1)
+        #         nn.init.constant_(m.bias, 0)
+        #     elif isinstance(m, nn.Linear):
+        #         nn.init.normal_(m.weight, std=0.01)
+        #         if m.bias is not None:
+        #             nn.init.constant_(m.bias, 0)
+        # self.encoder.apply(initialize)
+        # self.decoder.apply(initialize)
 
         # # Initialize last layer of class head
         # # NOTE: see Focal Loss paper for detail https://arxiv.org/abs/1708.02002
