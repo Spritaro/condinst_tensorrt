@@ -280,7 +280,7 @@ class SparseInst(nn.Module):
             mask_targets = torch.stack([torch.from_numpy(targets[batch_idx][target_idx]['segmentation']).to(dtype).to(device) for target_idx in range(K)]) # [K, imageH, imageW]
 
             # Downsample target mask to 1/4 of input size
-            mask_targets = F.avg_pool2d(mask_targets, kernel_size=4, stride=4, padding=0) # [batch, N, maskH, maskW]
+            mask_targets = F.avg_pool2d(mask_targets, kernel_size=4, stride=4, padding=0) # [N, maskH, maskW]
 
             score_matrix = self.generate_score_matrix(c, mp, label_targets, mask_targets) # [N, K]
             assigned_inst_idxs, assigned_target_idxs = self.assign_targets_to_instances(score_matrix) # List of length min(N, K)
@@ -459,7 +459,7 @@ class SparseInst(nn.Module):
         stack_mask_logits = mask_logits[inst_idxs,:,:] # [min(N, K), maskH, maskW]
         stack_mask_preds = mask_preds[inst_idxs,:,:] # [min(N, K), maskH, maskW]
         stack_mask_targets = mask_targets[target_idxs,:,:] # [min(N, K), maskH, maskW]
-        dice_loss_ = dice_loss(stack_mask_preds, stack_mask_targets).mean() # [min(N, K)]
+        dice_loss_ = dice_loss(stack_mask_preds, stack_mask_targets).mean() # []
         bce_loss = F.binary_cross_entropy_with_logits(stack_mask_logits, stack_mask_targets, reduction='mean')
         mask_loss = dice_loss_ + bce_loss
         return mask_loss
