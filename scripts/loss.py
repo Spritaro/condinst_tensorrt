@@ -1,11 +1,11 @@
 import torch
 
-def dice(inputs, targets, smooth=1e-3):
+def dice(inputs, targets, eps=1e-3):
     """
     Params:
         inputs: Tensor[N, *]
         targets: Tensor[N, *]
-        smooth: smoothing factor
+        eps:
     Returns:
         loss: Tensor[N]
     """
@@ -13,16 +13,16 @@ def dice(inputs, targets, smooth=1e-3):
     inputs = inputs.view(N, -1)
     targets = targets.view(N, -1)
 
-    dice_ = (2 * (inputs*targets).sum(dim=1) + smooth) / ((inputs**2).sum(dim=1) + (targets**2).sum(dim=1) + smooth)
+    dice_ = (2 * (inputs*targets).sum(dim=1)) / ((inputs**2).sum(dim=1) + (targets**2).sum(dim=1) + eps)
     return dice_
 
-def dice_loss(inputs, targets, smooth=1.0):
+def dice_loss(inputs, targets, eps=1e-3):
     """
     Params:
         inputs: Tensor[N, *]
         targets: Tensor[N, *]
-        smooth: smoothing factor
+        smooth:
     Returns:
         loss: Tensor[N]
     """
-    return 1 - dice(inputs, targets, smooth)
+    return 1 - dice(inputs, targets, eps)
