@@ -176,6 +176,10 @@ class SparseInst(nn.Module):
         # self.encoder.apply(initialize)
         # self.decoder.apply(initialize)
 
+        # Initialize F-iam
+        nn.init.normal_(self.decoder.f_iam[0].weight, std=1.0)
+        nn.init.normal_(self.decoder.f_iam[0].bias, std=1.0)
+
         # # Initialize last layer of class head
         # # NOTE: see Focal Loss paper for detail https://arxiv.org/abs/1708.02002
         # pi = 0.01
