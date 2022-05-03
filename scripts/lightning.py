@@ -9,7 +9,7 @@ from mean_average_precision import MeanAveragePrecision
 class LitSparseInst(pl.LightningModule):
     def __init__(self, mode, input_channels, num_classes, num_instances,
                 learning_rate, score_threshold=0.3, mask_threshold=0.5,
-                class_loss_factor=2.0, score_loss_factor=1.0, mask_loss_factor=2.0):
+                class_loss_factor=2.0, score_loss_factor=0.0, mask_loss_factor=2.0):
         super().__init__()
         self.num_instances = num_instances
         self.learning_rate = learning_rate
