@@ -29,7 +29,7 @@ parser.add_argument('--input_width', type=int, default=640, required=False, help
 parser.add_argument('--input_height', type=int, default=480, help="height of input image (default 480)")
 parser.add_argument('--input_channels', type=int, default=3, choices=[3, 4], help="number of input channels (default 3)")
 parser.add_argument('--num_classes', type=int, default=80, help="number of classes (default 80)")
-parser.add_argument('--num_instances', type=int, default=40, help="max number of instances to detect during inference (default 40)")
+parser.add_argument('--num_instances', type=int, default=100, help="max number of instances to detect during inference (default 100)")
 parser.add_argument('--mixed_precision', type=bool, default=True, help="allow FP16 training (default True)")
 
 # Pre-processing options
@@ -52,7 +52,7 @@ parser_train.add_argument('--val_depth', type=str, default=None, required=False,
 # Training options
 parser_train.add_argument('--pretrained_model', type=str, default=None, help="path to pretrained model (optional)")
 parser_train.add_argument('--batch_size', type=int, default=8, help="batch size (default 8)")
-parser_train.add_argument('--accumulate_grad_batches', type=int, default=16, help="number of gradients to accumulate (default 16)")
+parser_train.add_argument('--accumulate_grad_batches', type=int, default=8, help="number of gradients to accumulate (default 16)")
 parser_train.add_argument('--num_workers', type=int, default=4, help="number of workers for data loader (default 4)")
 parser_train.add_argument('--resume_from_checkpoint', type=str, default=None, help="path to checkpoint file (optional)")
 parser_train.add_argument('--max_epochs', type=int, default=10, help="number of epochs (default 10")
