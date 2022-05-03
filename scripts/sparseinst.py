@@ -54,15 +54,25 @@ class Encoder(nn.Module):
     def __init__(self, num_channels):
         super().__init__()
 
+        def conv1x1_bn(in_channels, out_channels):
+            layers = []
+            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=1, padding=0, bias=False))
+            layers.append(nn.BatchNorm2d(out_channels))
+            return nn.Sequential(*layers)
         self.lateral_conv3 = conv1x1_bn(512, num_channels)
         self.lateral_conv4 = conv1x1_bn(1024, num_channels)
         self.lateral_conv5 = conv1x1_bn(2048, num_channels)
 
         self.ppm = PyramidPoolingModule(num_channels, num_channels//4)
 
-        self.conv3 = conv3x3_bn_relu(num_channels, num_channels)
-        self.conv4 = conv3x3_bn_relu(num_channels, num_channels)
-        self.conv5 = conv3x3_bn_relu(num_channels, num_channels)
+        def conv3x3_bn(in_channels, out_channels):
+            layers = []
+            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False))
+            layers.append(nn.BatchNorm2d(out_channels))
+            return nn.Sequential(*layers)
+        self.conv3 = conv3x3_bn(num_channels, num_channels)
+        self.conv4 = conv3x3_bn(num_channels, num_channels)
+        self.conv5 = conv3x3_bn(num_channels, num_channels)
         return
 
     def forward(self, c3, c4, c5):
@@ -92,45 +102,46 @@ class Decoder(nn.Module):
     def __init__(self, num_classes, num_instances, num_channels):
         super().__init__()
 
-        self.num_classes = num_classes # C
-        self.num_instances = num_instances # N
-        self.num_channels = num_channels # D
-
-        self.inst_branch = conv3x3_bn_relu(self.num_channels*3+2, self.num_channels, num_stack=4)
-        self.mask_branch = conv3x3_bn_relu(self.num_channels*3+2, self.num_channels, num_stack=4)
+        def stack_conv3x3_bn_relu(in_channels, out_channels, num_stack):
+            layers = []
+            for i in range(num_stack):
+                layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False))
+                layers.append(nn.BatchNorm2d(out_channels))
+                layers.append(nn.ReLU())
+                in_channels = out_channels
+            return nn.Sequential(*layers)
+        self.inst_branch = stack_conv3x3_bn_relu(num_channels*3+2, num_channels, num_stack=4)
+        self.mask_branch = stack_conv3x3_bn_relu(num_channels*3+2, num_channels, num_stack=4)
+        self.mask_conv = nn.Conv2d(num_channels, num_channels, kernel_size=1, padding=0, bias=True)
 
         self.f_iam = nn.Sequential(
-            nn.Conv2d(in_channels=self.num_channels, out_channels=self.num_instances, kernel_size=3, padding=1, bias=True),
+            nn.Conv2d(num_channels, num_instances, kernel_size=3, padding=1, bias=True),
             nn.Sigmoid())
 
-        self.class_head = nn.Sequential(
-            nn.Linear(self.num_channels, self.num_classes))
-        self.score_head = nn.Sequential(
-            nn.Linear(self.num_channels, 1))
-        self.kernel_head = nn.Sequential(
-            nn.Linear(self.num_channels, self.num_channels))
+        self.class_head = nn.Linear(num_channels, num_classes)
+        self.score_head = nn.Linear(num_channels, 1)
+        self.kernel_head = nn.Linear(num_channels, num_channels)
         return
 
     def forward(self, feature):
         """
         Params:
-            feature: Tensor[batch, D, N, W]
+            feature: Tensor[batch, D*3, H, W]
         Returns:
             class_logits: Tensor[batch, N, C]
             mask_logits: Tensor[batch, N, H, W]
         """
-        batch = feature.shape[0]
-
+        # Instance branch
         inst_feature = self.inst_branch(feature)
-        mask_feature = self.mask_branch(feature)
+        batch, D, H, W = inst_feature.shape
 
         # Instance activation map
         iam = self.f_iam(inst_feature) # [batch, N, H, W]
-        iam = iam.view(batch, self.num_instances, -1) # [batch, N, (H*W)]
-        iam = nn.functional.normalize(iam, p=1.0, dim=2)
+        iam = iam.view(batch, -1, H*W) # [batch, N, (H*W)]
+        iam = iam / (iam.sum(dim=2, keepdim=True) + 1e-3) # Normalize
 
         # Instance aware feature
-        inst_feature = inst_feature.view(batch, self.num_channels, -1) # [batch, D, (H*W)]
+        inst_feature = inst_feature.view(batch, D, -1) # [batch, D, (H*W)]
         inst_feature = torch.transpose(inst_feature, 1, 2) # [batch, (H*W), D]
         inst_aware_feature = torch.matmul(iam, inst_feature) # [batch, N, D] = [batch, N, (H*W)] * [batch, (H*W), D]
 
@@ -139,7 +150,9 @@ class Decoder(nn.Module):
         score_logits = self.score_head(inst_aware_feature) # [batch, N, 1]
         kernel_logits = self.kernel_head(inst_aware_feature) # [batch, N, D]
 
-        # Masks
+        # Mask branch
+        mask_feature = self.mask_branch(feature)
+        mask_feature = self.mask_conv(mask_feature)
         mask_logits = self.generate_mask(kernel_logits, mask_feature)
 
         return class_logits, score_logits, mask_logits
@@ -171,14 +184,12 @@ class SparseInst(nn.Module):
         super().__init__()
         assert mode in ['training', 'inference']
         self.mode = mode
-        self.num_classes = num_classes
-        self.num_instances = num_instances
-        self.num_channels = 256
+        num_channels = 256
 
         self.backbone = torchvision.models.resnet50(pretrained=True)
 
-        self.encoder = Encoder(self.num_channels)
-        self.decoder = Decoder(self.num_classes, self.num_instances, self.num_channels)
+        self.encoder = Encoder(num_channels)
+        self.decoder = Decoder(num_classes, num_instances, num_channels)
 
         # def freeze_bn(m):
         #     if isinstance(m, nn.BatchNorm2d):
