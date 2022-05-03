@@ -123,6 +123,33 @@ class Decoder(nn.Module):
         self.kernel_head = nn.Linear(num_channels, num_channels)
         return
 
+        # # Initialize
+        # def initialize_conv(m):
+        #     if isinstance(m, nn.Conv2d):
+        #         nn.init.kaiming_normal_(m.weight)
+        #         if m.bias is not None:
+        #             nn.init.constant_(m.bias, 0)
+        # self.inst_branch.apply(initialize_conv)
+        # self.mask_branch.apply(initialize_conv)
+
+        # def initialize_f_iam_class_head(m):
+        #     if isinstance(m, nn.Conv2d):
+        #         nn.init.normal_(m.weight, std=0.01)
+        #         if m.bias is not None:
+        #             prob = 0.01
+        #             bias = -math.log((1 - prob) / prob)
+        #             nn.init.constant_(m.bias, bias)
+        # self.f_iam.apply(initialize_f_iam_class_head)
+        # self.class_head.apply(initialize_f_iam_class_head)
+
+        # def initialize_kernel_head(m):
+        #     if isinstance(m, nn.Conv2d):
+        #         nn.init.normal_(m.weight, std=0.01)
+        #         if m.bias is not None:
+        #             nn.init.constant_(m.bias, 0)
+        # self.kernel_head.apply(initialize_kernel_head)
+        # return
+
     def forward(self, feature):
         """
         Params:
@@ -196,31 +223,6 @@ class SparseInst(nn.Module):
         #         assert(hasattr(m, 'track_running_stats'))
         #         m.track_running_stats = False
         # self.backbone.apply(freeze_bn)
-
-        # def initialize(m):
-        #     if isinstance(m, nn.Conv2d):
-        #         nn.init.normal_(m.weight, std=0.01)
-        #         if m.bias is not None:
-        #             nn.init.constant_(m.bias, 0)
-        #     elif isinstance(m, nn.BatchNorm2d):
-        #         nn.init.constant_(m.weight, 1)
-        #         nn.init.constant_(m.bias, 0)
-        #     elif isinstance(m, nn.Linear):
-        #         nn.init.normal_(m.weight, std=0.01)
-        #         if m.bias is not None:
-        #             nn.init.constant_(m.bias, 0)
-        # self.encoder.apply(initialize)
-        # self.decoder.apply(initialize)
-
-        # Initialize F-iam
-        nn.init.normal_(self.decoder.f_iam[0].weight, std=1.0)
-        nn.init.normal_(self.decoder.f_iam[0].bias, std=1.0)
-
-        # # Initialize last layer of class head
-        # # NOTE: see Focal Loss paper for detail https://arxiv.org/abs/1708.02002
-        # pi = 0.01
-        # bias = -math.log((1 - pi) / pi)
-        # nn.init.constant_(self.decoder.class_head[-1].bias, bias)
 
         # Change number of input channels
         if input_channels != 3:
