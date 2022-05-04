@@ -112,7 +112,7 @@ class Decoder(nn.Module):
             return nn.Sequential(*layers)
         self.inst_branch = stack_conv3x3_bn_relu(num_channels*3+2, num_channels, num_stack=4)
         self.mask_branch = stack_conv3x3_bn_relu(num_channels*3+2, num_channels, num_stack=4)
-        self.mask_conv = nn.Conv2d(num_channels, num_channels, kernel_size=1, padding=0, bias=True)
+        self.mask_projection = nn.Conv2d(num_channels, num_channels, kernel_size=1, padding=0, bias=True)
 
         self.f_iam = nn.Sequential(
             nn.Conv2d(num_channels, num_instances, kernel_size=3, padding=1, bias=True),
@@ -179,7 +179,7 @@ class Decoder(nn.Module):
 
         # Mask branch
         mask_feature = self.mask_branch(feature)
-        mask_feature = self.mask_conv(mask_feature)
+        mask_feature = self.mask_projection(mask_feature)
         mask_logits = self.generate_mask(kernel_logits, mask_feature)
 
         return class_logits, score_logits, mask_logits
