@@ -56,7 +56,7 @@ class Encoder(nn.Module):
 
         def conv1x1(in_channels, out_channels):
             layers = []
-            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=1, padding=0, bias=False))
+            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=1, padding=0, bias=True))
             return nn.Sequential(*layers)
         self.lateral_conv3 = conv1x1(512, num_channels)
         self.lateral_conv4 = conv1x1(1024, num_channels)
@@ -66,7 +66,7 @@ class Encoder(nn.Module):
 
         def conv3x3(in_channels, out_channels):
             layers = []
-            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False))
+            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=True))
             return nn.Sequential(*layers)
         self.conv3 = conv3x3(num_channels, num_channels)
         self.conv4 = conv3x3(num_channels, num_channels)
@@ -103,7 +103,7 @@ class Decoder(nn.Module):
         def stack_conv3x3_relu(in_channels, out_channels, num_stack):
             layers = []
             for i in range(num_stack):
-                layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False))
+                layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=True))
                 layers.append(nn.ReLU())
                 in_channels = out_channels
             return nn.Sequential(*layers)
