@@ -54,25 +54,23 @@ class Encoder(nn.Module):
     def __init__(self, num_channels):
         super().__init__()
 
-        def conv1x1_bn(in_channels, out_channels):
+        def conv1x1(in_channels, out_channels):
             layers = []
             layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=1, padding=0, bias=False))
-            layers.append(nn.BatchNorm2d(out_channels))
             return nn.Sequential(*layers)
-        self.lateral_conv3 = conv1x1_bn(512, num_channels)
-        self.lateral_conv4 = conv1x1_bn(1024, num_channels)
-        self.lateral_conv5 = conv1x1_bn(2048, num_channels)
+        self.lateral_conv3 = conv1x1(512, num_channels)
+        self.lateral_conv4 = conv1x1(1024, num_channels)
+        self.lateral_conv5 = conv1x1(2048, num_channels)
 
         # self.ppm = PyramidPoolingModule(num_channels, num_channels//4)
 
-        def conv3x3_bn(in_channels, out_channels):
+        def conv3x3(in_channels, out_channels):
             layers = []
             layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False))
-            layers.append(nn.BatchNorm2d(out_channels))
             return nn.Sequential(*layers)
-        self.conv3 = conv3x3_bn(num_channels, num_channels)
-        self.conv4 = conv3x3_bn(num_channels, num_channels)
-        self.conv5 = conv3x3_bn(num_channels, num_channels)
+        self.conv3 = conv3x3(num_channels, num_channels)
+        self.conv4 = conv3x3(num_channels, num_channels)
+        self.conv5 = conv3x3(num_channels, num_channels)
         return
 
     def forward(self, c3, c4, c5):
@@ -102,16 +100,15 @@ class Decoder(nn.Module):
     def __init__(self, num_classes, num_instances, num_channels, num_kernel_channels):
         super().__init__()
 
-        def stack_conv3x3_bn_relu(in_channels, out_channels, num_stack):
+        def stack_conv3x3_relu(in_channels, out_channels, num_stack):
             layers = []
             for i in range(num_stack):
                 layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False))
-                layers.append(nn.BatchNorm2d(out_channels))
                 layers.append(nn.ReLU())
                 in_channels = out_channels
             return nn.Sequential(*layers)
-        self.inst_branch = stack_conv3x3_bn_relu(num_channels*3+2, num_channels, num_stack=4)
-        self.mask_branch = stack_conv3x3_bn_relu(num_channels*3+2, num_channels, num_stack=4)
+        self.inst_branch = stack_conv3x3_relu(num_channels*3+2, num_channels, num_stack=4)
+        self.mask_branch = stack_conv3x3_relu(num_channels*3+2, num_channels, num_stack=4)
         self.mask_projection = nn.Conv2d(num_channels, num_kernel_channels, kernel_size=1, padding=0, bias=True)
 
         self.f_iam = nn.Sequential(
@@ -128,9 +125,6 @@ class Decoder(nn.Module):
                 nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
         self.inst_branch.apply(initialize_branch)
         self.mask_branch.apply(initialize_branch)
         self.mask_projection.apply(initialize_branch)
