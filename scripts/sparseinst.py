@@ -194,12 +194,8 @@ class Decoder(nn.Module):
         batch, N, kernel = kernel_logits.shape
         _, _, H, W = mask_feature.shape
 
-        m = mask_feature.view(batch, 1, kernel, 1, -1) # [batch, 1, kernel, 1, (H*W)]
-        m = m.transpose(2, 4) # [batch, 1, (H*W), 1, kernel]
-
-        w = kernel_logits.view(batch, N, 1, kernel, 1) # [batch, N, 1, kernel, 1]
-
-        mask_logits = torch.matmul(m, w) # [batch, N, (H*W), 1, 1] = [batch, 1, (H*W), 1, kernel] * [batch, N, 1, kernel, 1]
+        # [batch, N, (H*W)] = [batch, N, kernel] * [batch, kernel, (H*W)]
+        mask_logits = torch.matmul(kernel_logits, mask_feature.view(batch, kernel, -1))
         mask_logits = mask_logits.view(batch, -1, H, W) # Tensor[batch, N, H, W]
 
         return mask_logits
