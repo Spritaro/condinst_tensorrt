@@ -122,15 +122,18 @@ class Decoder(nn.Module):
         self.score_head = nn.Linear(num_channels, 1)
         self.kernel_head = nn.Linear(num_channels, num_channels)
 
-        # # Initialize
-        # def initialize_conv(m):
-        #     if isinstance(m, nn.Conv2d):
-        #         nn.init.kaiming_normal_(m.weight)
-        #         if m.bias is not None:
-        #             nn.init.constant_(m.bias, 0)
-        # self.inst_branch.apply(initialize_conv)
-        # self.mask_branch.apply(initialize_conv)
-        # self.mask_projection.apply(initialize_conv)
+        # Initialize
+        def initialize_branch(m):
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+        self.inst_branch.apply(initialize_branch)
+        self.mask_branch.apply(initialize_branch)
+        self.mask_projection.apply(initialize_branch)
 
         def initialize_head(m):
             if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
