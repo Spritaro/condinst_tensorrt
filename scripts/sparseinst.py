@@ -99,7 +99,7 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, num_classes, num_instances, num_channels):
+    def __init__(self, num_classes, num_instances, num_channels, num_kernel_channels):
         super().__init__()
 
         def stack_conv3x3_bn_relu(in_channels, out_channels, num_stack):
@@ -112,7 +112,7 @@ class Decoder(nn.Module):
             return nn.Sequential(*layers)
         self.inst_branch = stack_conv3x3_bn_relu(num_channels*3+2, num_channels, num_stack=4)
         self.mask_branch = stack_conv3x3_bn_relu(num_channels*3+2, num_channels, num_stack=4)
-        self.mask_projection = nn.Conv2d(num_channels, num_channels, kernel_size=1, padding=0, bias=True)
+        self.mask_projection = nn.Conv2d(num_channels, num_kernel_channels, kernel_size=1, padding=0, bias=True)
 
         self.f_iam = nn.Sequential(
             nn.Conv2d(num_channels, num_instances, kernel_size=3, padding=1, bias=True),
@@ -120,7 +120,7 @@ class Decoder(nn.Module):
 
         self.class_head = nn.Linear(num_channels, num_classes)
         self.score_head = nn.Linear(num_channels, 1)
-        self.kernel_head = nn.Linear(num_channels, num_channels)
+        self.kernel_head = nn.Linear(num_channels, num_kernel_channels)
 
         # Initialize
         def initialize_branch(m):
@@ -174,32 +174,32 @@ class Decoder(nn.Module):
         # Heads
         class_logits = self.class_head(inst_aware_feature) # [batch, N, C]
         score_logits = self.score_head(inst_aware_feature) # [batch, N, 1]
-        kernel_logits = self.kernel_head(inst_aware_feature) # [batch, N, D]
+        kernel_logits = self.kernel_head(inst_aware_feature) # [batch, N, kernel]
 
         # Mask branch
         mask_feature = self.mask_branch(feature)
-        mask_feature = self.mask_projection(mask_feature)
-        mask_logits = self.generate_mask(kernel_logits, mask_feature)
+        mask_feature = self.mask_projection(mask_feature) # [batch, kernel, H, W]
+        mask_logits = self.generate_mask(kernel_logits, mask_feature) # [batch, 1, H, W]
 
         return class_logits, score_logits, mask_logits
 
     def generate_mask(self, kernel_logits, mask_feature):
         """
         Params:
-            kernel_logits: Tensor[batch, N, D]
-            mask_feature: Tensor[batch, D, H, W]
+            kernel_logits: Tensor[batch, N, kernel]
+            mask_feature: Tensor[batch, kernel, H, W]
         Returns:
             mask_preds: Tensor[batch, N, H, W]
         """
-        batch, N, D = kernel_logits.shape
+        batch, N, kernel = kernel_logits.shape
         _, _, H, W = mask_feature.shape
 
-        m = mask_feature.view(batch, 1, D, 1, -1) # [batch, 1, D, 1, (H*W)]
-        m = m.transpose(2, 4) # [batch, 1, (H*W), 1, D]
+        m = mask_feature.view(batch, 1, kernel, 1, -1) # [batch, 1, kernel, 1, (H*W)]
+        m = m.transpose(2, 4) # [batch, 1, (H*W), 1, kernel]
 
-        w = kernel_logits.view(batch, N, 1, D, 1) # [batch, N, 1, D, 1]
+        w = kernel_logits.view(batch, N, 1, kernel, 1) # [batch, N, 1, kernel, 1]
 
-        mask_logits = torch.matmul(m, w) # [batch, N, (H*W), 1, 1] = [batch, 1, (H*W), 1, D] * [batch, N, 1, D, 1]
+        mask_logits = torch.matmul(m, w) # [batch, N, (H*W), 1, 1] = [batch, 1, (H*W), 1, kernel] * [batch, N, 1, kernel, 1]
         mask_logits = mask_logits.view(batch, -1, H, W) # Tensor[batch, N, H, W]
 
         return mask_logits
@@ -211,11 +211,12 @@ class SparseInst(nn.Module):
         assert mode in ['training', 'inference']
         self.mode = mode
         num_channels = 256
+        num_kernel_channels = 128
 
         self.backbone = torchvision.models.resnet50(pretrained=True)
 
         self.encoder = Encoder(num_channels)
-        self.decoder = Decoder(num_classes, num_instances, num_channels)
+        self.decoder = Decoder(num_classes, num_instances, num_channels, num_kernel_channels)
 
         # def freeze_bn(m):
         #     if isinstance(m, nn.BatchNorm2d):
