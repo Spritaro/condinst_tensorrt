@@ -440,6 +440,7 @@ class SparseInst(nn.Module):
             class_loss: Tensor[]
         """
         N, C = class_logits.shape
+        K, = label_targets.shape
         dtype = class_logits.dtype
         device = class_logits.device
 
@@ -458,8 +459,8 @@ class SparseInst(nn.Module):
                 # Background instance
                 list_class_targets.append(zero_hot_label)
         stack_class_targets = torch.stack(list_class_targets) # [N, C]
-        class_loss = sigmoid_focal_loss(class_logits, stack_class_targets, reduction="mean")
-        return class_loss
+        class_loss = sigmoid_focal_loss(class_logits, stack_class_targets, reduction="sum")
+        return class_loss / K
 
     # def calculate_score_loss(self, inst_idxs, target_idxs, score_logits, mask_preds, mask_targets, eps=1e-3):
     #     """
