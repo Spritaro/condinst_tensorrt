@@ -121,7 +121,6 @@ class Decoder(nn.Module):
         self.class_head = nn.Linear(num_channels, num_classes)
         self.score_head = nn.Linear(num_channels, 1)
         self.kernel_head = nn.Linear(num_channels, num_channels)
-        return
 
         # # Initialize
         # def initialize_conv(m):
@@ -131,24 +130,21 @@ class Decoder(nn.Module):
         #             nn.init.constant_(m.bias, 0)
         # self.inst_branch.apply(initialize_conv)
         # self.mask_branch.apply(initialize_conv)
+        # self.mask_projection.apply(initialize_conv)
 
-        # def initialize_f_iam_class_head(m):
-        #     if isinstance(m, nn.Conv2d):
-        #         nn.init.normal_(m.weight, std=0.01)
-        #         if m.bias is not None:
-        #             prob = 0.01
-        #             bias = -math.log((1 - prob) / prob)
-        #             nn.init.constant_(m.bias, bias)
-        # self.f_iam.apply(initialize_f_iam_class_head)
-        # self.class_head.apply(initialize_f_iam_class_head)
+        def initialize_head(m):
+            if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
+                nn.init.normal_(m.weight, std=0.01)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, bias)
+        prob = 0.01
+        bias = -math.log((1 - prob) / prob)
+        self.f_iam.apply(initialize_head)
+        self.class_head.apply(initialize_head)
 
-        # def initialize_kernel_head(m):
-        #     if isinstance(m, nn.Conv2d):
-        #         nn.init.normal_(m.weight, std=0.01)
-        #         if m.bias is not None:
-        #             nn.init.constant_(m.bias, 0)
-        # self.kernel_head.apply(initialize_kernel_head)
-        # return
+        bias = 0.0
+        self.kernel_head.apply(initialize_head)
+        return
 
     def forward(self, feature):
         """
