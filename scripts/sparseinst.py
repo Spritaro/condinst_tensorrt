@@ -438,15 +438,14 @@ class SparseInst(nn.Module):
         device = class_logits.device
 
         negative_inst_idxs = [idx for idx in range(N) if idx not in inst_idxs]
-        stack_class_logits = torch.zeros_like(class_logits) # [N, C]
-        stack_class_logits[:minNK,:] += class_logits[inst_idxs]
-        stack_class_logits[minNK:,:] += class_logits[negative_inst_idxs]
+        stack_inst_idxs = inst_idxs + negative_inst_idxs
+        stack_class_logits = class_logits[stack_inst_idxs,:] # [N, C]
 
         stack_class_targets = torch.zeros_like(class_logits) # [N, C]
         class_targets = F.one_hot(label_targets, num_classes=C).to(dtype) # [K, C]
-        stack_class_targets[:minNK,:] += class_targets[target_idxs]
+        stack_class_targets[:minNK,:] += class_targets[target_idxs,:]
 
-        class_loss = sigmoid_focal_loss(class_logits, stack_class_targets, reduction="sum")
+        class_loss = sigmoid_focal_loss(stack_class_logits, stack_class_targets, reduction="sum")
         return class_loss / minNK
 
     # def calculate_score_loss(self, inst_idxs, target_idxs, score_logits, mask_preds, mask_targets, eps=1e-3):
