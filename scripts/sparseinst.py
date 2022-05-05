@@ -71,6 +71,8 @@ class Encoder(nn.Module):
         self.conv3 = conv3x3(num_channels, num_channels)
         self.conv4 = conv3x3(num_channels, num_channels)
         self.conv5 = conv3x3(num_channels, num_channels)
+
+        self.encoder_projection = conv1x1(num_channels * 3, num_channels)
         return
 
     def forward(self, c3, c4, c5):
@@ -92,7 +94,8 @@ class Encoder(nn.Module):
         # Concat
         x5 = F.interpolate(x5, scale_factor=4, mode='bilinear', align_corners=False)
         x4 = F.interpolate(x4, scale_factor=2, mode='bilinear', align_corners=False)
-        feature = torch.cat([x3, x4, x5], dim=1)
+        x = torch.cat([x3, x4, x5], dim=1)
+        feature = self.encoder_projection(x)
         return feature
 
 
@@ -107,8 +110,8 @@ class Decoder(nn.Module):
                 layers.append(nn.ReLU())
                 in_channels = out_channels
             return nn.Sequential(*layers)
-        self.inst_branch = stack_conv3x3_relu(num_channels*3+2, num_channels, num_stack=4)
-        self.mask_branch = stack_conv3x3_relu(num_channels*3+2, num_channels, num_stack=4)
+        self.inst_branch = stack_conv3x3_relu(num_channels+2, num_channels, num_stack=4)
+        self.mask_branch = stack_conv3x3_relu(num_channels+2, num_channels, num_stack=4)
         self.mask_projection = nn.Conv2d(num_channels, num_kernel_channels, kernel_size=1, padding=0, bias=True)
 
         self.f_iam = nn.Sequential(
