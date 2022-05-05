@@ -432,28 +432,22 @@ class SparseInst(nn.Module):
         Returns:
             class_loss: Tensor[]
         """
+        minNK = len(inst_idxs)
         N, C = class_logits.shape
-        K, = label_targets.shape
         dtype = class_logits.dtype
         device = class_logits.device
 
-        zero_hot_label = torch.zeros(C, device=device)
+        negative_inst_idxs = [idx for idx in range(N) if idx not in inst_idxs]
+        stack_class_logits = torch.zeros_like(class_logits) # [N, C]
+        stack_class_logits[:minNK,:] += class_logits[inst_idxs]
+        stack_class_logits[minNK:,:] += class_logits[negative_inst_idxs]
 
-        list_class_targets = []
-        for inst_idx in range(N):
-            if inst_idx in inst_idxs:
-                # Foreground instance
-                pair_idx = inst_idxs.index(inst_idx)
-                target_idx = target_idxs[pair_idx]
-                one_hot_label = nn.functional.one_hot(label_targets[target_idx], num_classes=C).to(dtype) # [1, C]
-                one_hot_label = one_hot_label.view(C) # [C]
-                list_class_targets.append(one_hot_label)
-            else:
-                # Background instance
-                list_class_targets.append(zero_hot_label)
-        stack_class_targets = torch.stack(list_class_targets) # [N, C]
+        stack_class_targets = torch.zeros_like(class_logits) # [N, C]
+        class_targets = F.one_hot(label_targets, num_classes=C).to(dtype) # [K, C]
+        stack_class_targets[:minNK,:] += class_targets[target_idxs]
+
         class_loss = sigmoid_focal_loss(class_logits, stack_class_targets, reduction="sum")
-        return class_loss / K
+        return class_loss / minNK
 
     # def calculate_score_loss(self, inst_idxs, target_idxs, score_logits, mask_preds, mask_targets, eps=1e-3):
     #     """
