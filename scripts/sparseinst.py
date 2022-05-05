@@ -10,7 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 import torchvision
 from torchvision.ops.focal_loss import sigmoid_focal_loss
 
-from loss import dice, dice_loss
+from loss import dice_score_matrix, dice_loss_vector
 
 
 # class PyramidPoolingModule(nn.Module):
@@ -352,24 +352,13 @@ class SparseInst(nn.Module):
         """
         N, _, _ = mask_preds.shape
         K, _, _ = mask_targets.shape
-        device = class_logits.device
 
         class_preds = torch.sigmoid(class_logits) # [N, C]
+        class_scores = class_preds[:, label_targets] # [N, K]
 
-        list_class_preds = []
-        list_mask_preds = []
-        list_mask_targets = []
-        for inst_idx in range(N):
-            for target_idx in range(K):
-                list_class_preds.append(class_preds[inst_idx, label_targets[target_idx]])
-                list_mask_preds.append(mask_preds[inst_idx,:,:])
-                list_mask_targets.append(mask_targets[target_idx,:,:])
-        stack_class_preds = torch.stack(list_class_preds) # [(N*K)]
-        stack_mask_preds = torch.stack(list_mask_preds) # [(N*K), maskH, maskW]
-        stack_mask_targets = torch.stack(list_mask_targets) # [(N*K), maskH, maskW]
+        dice_scores = dice_score_matrix(mask_preds, mask_targets) # [N, K]
 
-        score = stack_class_preds**(1-alpha) * dice(stack_mask_preds, stack_mask_targets)**alpha # [(N*K)]
-        score_matrix = score.view(N, K)
+        score_matrix = class_scores**(1-alpha) * dice_scores**alpha # [N, K]
         score_matrix += eps
 
         # Convert to numpy arrays
@@ -492,7 +481,7 @@ class SparseInst(nn.Module):
         stack_mask_logits = mask_logits[inst_idxs,:,:] # [min(N, K), maskH, maskW]
         stack_mask_preds = mask_preds[inst_idxs,:,:] # [min(N, K), maskH, maskW]
         stack_mask_targets = mask_targets[target_idxs,:,:] # [min(N, K), maskH, maskW]
-        dice_loss_ = dice_loss(stack_mask_preds, stack_mask_targets).mean() # []
+        dice_loss = dice_loss_vector(stack_mask_preds, stack_mask_targets).mean() # []
         # bce_loss = F.binary_cross_entropy_with_logits(stack_mask_logits, stack_mask_targets, reduction='mean')
-        mask_loss = dice_loss_ # + bce_loss
+        mask_loss = dice_loss # + bce_loss
         return mask_loss
