@@ -101,7 +101,7 @@ class LitSparseInst(pl.LightningModule):
     def configure_optimizers(self):
         # optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, eps=1e-3)
         # optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0.9, weight_decay=0.0001, nesterov=True)
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=1e-4, eps=1e-3)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=5e-2)
         return optimizer
 
     def concat_images_and_masks(self, images, class_logits, mask_preds):

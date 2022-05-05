@@ -52,12 +52,12 @@ parser_train.add_argument('--val_depth', type=str, default=None, required=False,
 # Training options
 parser_train.add_argument('--pretrained_model', type=str, default=None, help="path to pretrained model (optional)")
 parser_train.add_argument('--batch_size', type=int, default=8, help="batch size (default 8)")
-parser_train.add_argument('--accumulate_grad_batches', type=int, default=8, help="number of gradients to accumulate (default 16)")
+parser_train.add_argument('--accumulate_grad_batches', type=int, default=8, help="number of gradients to accumulate (default=8)")
 parser_train.add_argument('--num_workers', type=int, default=4, help="number of workers for data loader (default 4)")
 parser_train.add_argument('--resume_from_checkpoint', type=str, default=None, help="path to checkpoint file (optional)")
 parser_train.add_argument('--max_epochs', type=int, default=10, help="number of epochs (default 10")
 parser_train.add_argument('--gpus', type=int, default=1, help="number of GPUs to train (0 for CPU, -1 for all GPUs) (default 1)")
-parser_train.add_argument('--learning_rate', type=float, default=5e-5, help="learning rate (default 1e-5)")
+parser_train.add_argument('--learning_rate', type=float, default=5e-5, help="learning rate (default 5e-5)")
 # Logging options
 parser_train.add_argument('--tensorboard_log_dir', type=str, default='../runs', help="path to TensorBoard log dir (default '../runs')")
 # Output options
@@ -175,8 +175,8 @@ if __name__ == '__main__':
         os.makedirs(args.tensorboard_log_dir, exist_ok=True)
         tb_logger = pl_loggers.TensorBoardLogger(save_dir=args.tensorboard_log_dir, default_hp_metric=False)
 
-        # Profiler
-        profiler = pl.profiler.AdvancedProfiler()
+        # # Profiler
+        # profiler = pl.profiler.AdvancedProfiler()
 
         # Train model
         trainer = pl.Trainer(
@@ -189,7 +189,7 @@ if __name__ == '__main__':
             resume_from_checkpoint=args.resume_from_checkpoint,
             precision=precision,
             logger=tb_logger,
-            profiler=profiler
+            # profiler=profiler
         )
         trainer.fit(model, coco_train, coco_val)
 
