@@ -169,7 +169,7 @@ class Decoder(nn.Module):
         # Instance activation map
         iam = self.f_iam(inst_feature) # [batch, N, H, W]
         iam = iam.view(batch, -1, H*W) # [batch, N, (H*W)]
-        iam = iam / (iam.sum(dim=2, keepdim=True) + 1e-3) # Normalize
+        iam = iam / (iam.sum(dim=2, keepdim=True) + 1e-6) # Normalize
 
         # Instance aware feature
         inst_feature = inst_feature.view(batch, D, -1) # [batch, D, (H*W)]
@@ -346,7 +346,7 @@ class SparseInst(nn.Module):
         mask_loss = torch.stack(mask_losses).mean()
         return class_loss, score_loss, mask_loss
 
-    def generate_score_matrix(self, class_logits, mask_preds, label_targets, mask_targets, alpha=0.8, eps=1e-3):
+    def generate_score_matrix(self, class_logits, mask_preds, label_targets, mask_targets, alpha=0.8, eps=1e-6):
         """
         Params:
             class_logits: Tensor[N, C]
@@ -445,7 +445,7 @@ class SparseInst(nn.Module):
         class_loss = sigmoid_focal_loss(stack_class_logits, stack_class_targets, reduction="sum")
         return class_loss / minNK
 
-    # def calculate_score_loss(self, inst_idxs, target_idxs, score_logits, mask_preds, mask_targets, eps=1e-3):
+    # def calculate_score_loss(self, inst_idxs, target_idxs, score_logits, mask_preds, mask_targets, eps=1e-6):
     #     """
     #     Params:
     #         inst_idxs: List of length min(N, K)

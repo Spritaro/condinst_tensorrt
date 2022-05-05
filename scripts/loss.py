@@ -1,6 +1,6 @@
 import torch
 
-def dice_score_matrix(inputs, targets, eps=1e-3):
+def dice_score_matrix(inputs, targets, eps=1e-6):
     """
     Params:
         inputs: Tensor[N, *]
@@ -21,7 +21,7 @@ def dice_score_matrix(inputs, targets, eps=1e-3):
     dice = (2 * matrix) / (inputs2.view(N, 1) + targets2.view(1, K) + eps) # [N, K]
     return dice
 
-def dice_loss_vector(inputs, targets, eps=1e-3):
+def dice_loss_vector(inputs, targets, eps=1e-6):
     """
     Params:
         inputs: Tensor[N, *]

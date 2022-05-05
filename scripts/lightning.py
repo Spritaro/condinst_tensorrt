@@ -8,7 +8,7 @@ from mean_average_precision import MeanAveragePrecision
 
 class LitSparseInst(pl.LightningModule):
     def __init__(self, mode, input_channels, num_classes, num_instances,
-                learning_rate, score_threshold=0.3, mask_threshold=0.5,
+                learning_rate=None, score_threshold=0.3, mask_threshold=0.5,
                 class_loss_factor=2.0, score_loss_factor=0.0, mask_loss_factor=2.0):
         super().__init__()
         self.num_instances = num_instances
@@ -99,9 +99,9 @@ class LitSparseInst(pl.LightningModule):
         return map
 
     def configure_optimizers(self):
-        # optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, eps=1e-3)
-        # optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0.9, weight_decay=0.0001, nesterov=True)
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=5e-2)
+        # optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, eps=1e-6)
+        # optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0.9, weight_decay=1e-4, nesterov=True)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=1e-4)
         return optimizer
 
     def concat_images_and_masks(self, images, class_logits, mask_preds):
