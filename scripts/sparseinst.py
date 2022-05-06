@@ -1,5 +1,6 @@
 import math
 import numpy as np
+import scipy
 
 import torch
 import torch.nn.functional as F
@@ -396,27 +397,11 @@ class SparseInst(nn.Module):
             inst_idxs: List of length min(N, K)
             target_idxs: List of length min(N, K)
         """
-        # TODO: implement Hungarian matching
-        N, K = score_matrix.shape
-        dtype = score_matrix.dtype
-
-        min_score = 0.0
-        max_score = np.max(score_matrix)
-
-        inst_idxs = []
-        target_idxs = []
-        while max_score > min_score:
-            arg_max = np.argmax(score_matrix.flatten())
-            inst_idx = int(arg_max / K)
-            target_idx = int(arg_max % K)
-
-            score_matrix[inst_idx, :] = min_score
-            score_matrix[:, target_idx] = min_score
-
-            max_score = np.max(score_matrix)
-
-            inst_idxs.append(inst_idx)
-            target_idxs.append(target_idx)
+        # NOTE: scipy implementation of Hungarian algorithm
+        # see https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.linear_sum_assignment.html
+        inst_idxs, target_idxs = scipy.optimize.linear_sum_assignment(score_matrix, maximize=True)
+        inst_idxs = inst_idxs.tolist()
+        target_idxs = target_idxs.tolist()
         return inst_idxs, target_idxs
 
     def calculate_bg_class_loss(self, class_logits):
