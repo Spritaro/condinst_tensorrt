@@ -434,7 +434,7 @@ class SparseInst(nn.Module):
             class_loss: Tensor[]
         """
         class_targets = torch.zeros_like(class_logits) # [N, C]
-        class_targets[target_idxs, label_targets[target_idxs]] = 1
+        class_targets[inst_idxs, label_targets[target_idxs]] = 1
 
         class_loss = sigmoid_focal_loss(class_logits, class_targets, reduction="sum")
         return class_loss
