@@ -52,7 +52,7 @@ parser_train.add_argument('--val_depth', type=str, default=None, required=False,
 # Training options
 parser_train.add_argument('--pretrained_model', type=str, default=None, help="path to pretrained model (optional)")
 parser_train.add_argument('--batch_size', type=int, default=8, help="batch size (default 8)")
-parser_train.add_argument('--accumulate_grad_batches', type=int, default=8, help="number of gradients to accumulate (default=8)")
+parser_train.add_argument('--accumulate_grad_batches', type=int, default=64, help="number of gradients to accumulate (default=64)")
 parser_train.add_argument('--num_workers', type=int, default=4, help="number of workers for data loader (default 4)")
 parser_train.add_argument('--resume_from_checkpoint', type=str, default=None, help="path to checkpoint file (optional)")
 parser_train.add_argument('--max_epochs', type=int, default=10, help="number of epochs (default 10")
