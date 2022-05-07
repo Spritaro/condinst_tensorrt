@@ -271,9 +271,11 @@ class SparseInst(nn.Module):
             return class_logits, score_logits, mask_logits
         else:
             class_preds = torch.sigmoid(class_logits) # classification predictions
-            score_preds = torch.sigmoid(score_logits) # objectness score predictions
-            scores = torch.sqrt(class_preds * score_preds)
-            labels = torch.argmax(scores, dim=2)
+            # score_preds = torch.sigmoid(score_logits) # objectness score predictions
+            # scores = torch.sqrt(class_preds * score_preds) # [batch, N, C]
+            scores = class_preds
+            labels = torch.argmax(scores, dim=2) # [batch, N]
+            scores, _ = torch.max(scores, dim=2)
             return labels.int(), scores.float(), mask_logits.float()
 
     def add_coordinate(self, feature):
