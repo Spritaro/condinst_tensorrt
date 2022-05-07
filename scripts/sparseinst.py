@@ -491,6 +491,6 @@ class SparseInst(nn.Module):
         stack_mask_preds = mask_preds[inst_idxs,:,:] # [min(N, K), maskH, maskW]
         stack_mask_targets = mask_targets[target_idxs,:,:] # [min(N, K), maskH, maskW]
         dice_loss = dice_loss_vector(stack_mask_preds, stack_mask_targets).mean() # []
-        # bce_loss = F.binary_cross_entropy_with_logits(stack_mask_logits, stack_mask_targets, reduction='mean')
-        mask_loss = dice_loss # + bce_loss
+        bce_loss = F.binary_cross_entropy_with_logits(stack_mask_logits, stack_mask_targets, reduction='mean')
+        mask_loss = dice_loss + bce_loss
         return mask_loss
