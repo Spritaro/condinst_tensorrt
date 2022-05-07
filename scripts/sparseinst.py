@@ -271,9 +271,9 @@ class SparseInst(nn.Module):
             return class_logits, score_logits, mask_logits
         else:
             class_preds = torch.sigmoid(class_logits) # classification predictions
-            # score_preds = torch.sigmoid(score_logits) # objectness score predictions
-            # scores = torch.sqrt(class_preds * score_preds) # [batch, N, C]
-            scores = class_preds
+            score_preds = torch.sigmoid(score_logits) # objectness score predictions
+            scores = torch.sqrt(class_preds * score_preds) # [batch, N, C]
+            # scores = class_preds
             scores, labels = torch.max(scores, dim=2)
             return labels.int(), scores.float(), mask_logits.float()
 
@@ -316,7 +316,7 @@ class SparseInst(nn.Module):
 
         # For each batch
         class_losses = []
-        # score_losses = []
+        score_losses = []
         mask_losses = []
         for batch_idx in range(batch):
             K = len(targets[batch_idx]) # num_targets
@@ -330,8 +330,8 @@ class SparseInst(nn.Module):
                 # Calculate background loss
                 class_loss = self.calculate_bg_class_loss(c)
                 class_losses.append(class_loss)
-                # score_loss = torch.as_tensor(0.0, dtype=dtype, device=device)
-                # score_losses.append(score_loss)
+                score_loss = torch.as_tensor(0.0, dtype=dtype, device=device)
+                score_losses.append(score_loss)
                 mask_loss = torch.as_tensor(0.0, dtype=dtype, device=device)
                 mask_losses.append(mask_loss)
                 continue
@@ -349,17 +349,17 @@ class SparseInst(nn.Module):
             class_loss = self.calculate_class_loss(assigned_inst_idxs, assigned_target_idxs, c, label_targets)
             class_losses.append(class_loss)
 
-            # # Calculate score loss
-            # score_loss = self.calculate_score_loss(assigned_inst_idxs, assigned_target_idxs, s, mp, mask_targets)
-            # score_losses.append(score_loss)
+            # Calculate score loss
+            score_loss = self.calculate_score_loss(assigned_inst_idxs, assigned_target_idxs, s, mp, mask_targets)
+            score_losses.append(score_loss)
 
             # Calculate mask loss
             mask_loss = self.calculate_mask_loss(assigned_inst_idxs, assigned_target_idxs, ml, mp, mask_targets)
             mask_losses.append(mask_loss)
 
         class_loss = torch.stack(class_losses).mean()
-        # score_loss = torch.stack(score_losses).mean()
-        score_loss = torch.as_tensor(0.0, dtype=dtype, device=device)
+        score_loss = torch.stack(score_losses).mean()
+        # score_loss = torch.as_tensor(0.0, dtype=dtype, device=device)
         mask_loss = torch.stack(mask_losses).mean()
         return class_loss, score_loss, mask_loss
 
@@ -446,35 +446,35 @@ class SparseInst(nn.Module):
         class_loss = sigmoid_focal_loss(stack_class_logits, stack_class_targets, reduction="sum")
         return class_loss / minNK
 
-    # def calculate_score_loss(self, inst_idxs, target_idxs, score_logits, mask_preds, mask_targets, eps=1e-6):
-    #     """
-    #     Params:
-    #         inst_idxs: List of length min(N, K)
-    #         target_idxs: List of length min(N, K)
-    #         score_logits: Tensor[N, 1]
-    #         mask_preds: Tensor[N, maskH, maskW]
-    #         mask_targets: Tensor[K, maskH, maskW]
-    #         eps: float
-    #     Returns:
-    #         class_loss: Tensor[]
-    #     """
-    #     N, maskH, maskW = mask_preds.shape
-    #     dtype = mask_preds.dtype
-    #     device = mask_preds.device
+    def calculate_score_loss(self, inst_idxs, target_idxs, score_logits, mask_preds, mask_targets, eps=1e-6):
+        """
+        Params:
+            inst_idxs: List of length min(N, K)
+            target_idxs: List of length min(N, K)
+            score_logits: Tensor[N, 1]
+            mask_preds: Tensor[N, maskH, maskW]
+            mask_targets: Tensor[K, maskH, maskW]
+            eps: float
+        Returns:
+            class_loss: Tensor[]
+        """
+        N, maskH, maskW = mask_preds.shape
+        dtype = mask_preds.dtype
+        device = mask_preds.device
 
-    #     stack_score_logits = score_logits[inst_idxs,:].view(-1) # [min(N, K)]
-    #     stack_mask_preds = mask_preds[inst_idxs,:,:] # [min(N, K), maskH, maskW]
-    #     stack_mask_targets = mask_targets[target_idxs,:,:] # [min(N, K), maskH, maskW]
+        stack_score_logits = score_logits[inst_idxs,:].view(-1) # [min(N, K)]
+        stack_mask_preds = mask_preds[inst_idxs,:,:] # [min(N, K), maskH, maskW]
+        stack_mask_targets = mask_targets[target_idxs,:,:] # [min(N, K), maskH, maskW]
 
-    #     # Mask-IoU
-    #     stack_mask_preds = (stack_mask_preds > 0.3).float()
-    #     stack_mask_targets = (stack_mask_targets > 0.3).float()
-    #     intersection = (stack_mask_preds * stack_mask_targets).sum(dim=(1,2))
-    #     union = stack_mask_preds.sum(dim=(1,2)) + stack_mask_targets.sum(dim=(1,2)) - intersection
-    #     score_target = intersection / (union + eps)
+        # Mask-IoU
+        stack_mask_preds = (stack_mask_preds > 0.3).float()
+        stack_mask_targets = (stack_mask_targets > 0.3).float()
+        intersection = (stack_mask_preds * stack_mask_targets).sum(dim=(1,2))
+        union = stack_mask_preds.sum(dim=(1,2)) + stack_mask_targets.sum(dim=(1,2)) - intersection
+        score_target = intersection / (union + eps)
 
-    #     score_loss = F.binary_cross_entropy_with_logits(stack_score_logits, score_target.detach(), reduction='mean')
-    #     return score_loss
+        score_loss = F.binary_cross_entropy_with_logits(stack_score_logits, score_target.detach(), reduction='mean')
+        return score_loss
 
     def calculate_mask_loss(self, inst_idxs, target_idxs, mask_logits, mask_preds, mask_targets):
         """

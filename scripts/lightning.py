@@ -9,7 +9,7 @@ from mean_average_precision import MeanAveragePrecision
 class LitSparseInst(pl.LightningModule):
     def __init__(self, mode, input_channels, num_classes, num_instances,
                 learning_rate=None, score_threshold=0.3, mask_threshold=0.5,
-                class_loss_factor=2.0, score_loss_factor=0.0, mask_loss_factor=2.0):
+                class_loss_factor=2.0, score_loss_factor=1.0, mask_loss_factor=2.0):
         super().__init__()
         self.num_instances = num_instances
         self.learning_rate = learning_rate
@@ -52,7 +52,7 @@ class LitSparseInst(pl.LightningModule):
             tensorboard.add_scalar("loss", loss, self.global_step)
             # Display masks
             mask_preds = torch.sigmoid(mask_logits)
-            images_and_masks = self.concat_images_and_masks(images[:,:3,:,:], class_logits, mask_preds)
+            images_and_masks = self.concat_images_and_masks(images[:,:3,:,:], class_logits, score_logits, mask_preds)
             img_grid = torchvision.utils.make_grid(images_and_masks, nrow=images.shape[0])
             tensorboard.add_image('images', img_grid, global_step=self.global_step)
 
@@ -104,11 +104,12 @@ class LitSparseInst(pl.LightningModule):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=1e-4)
         return optimizer
 
-    def concat_images_and_masks(self, images, class_logits, mask_preds):
+    def concat_images_and_masks(self, images, class_logits, score_logits, mask_preds):
         """
         Params:
             images: Tensor[batch, 3, imageH, imageW]
             class_logits: Tensor[batch, N, C]
+            score_logits: Tensor[batch, N, 1]
             mask_preds: Tensor[batch, N, H, W]
         Returns:
             images_and_depths: Tensor[batch*2, 3, H, W]
@@ -123,7 +124,9 @@ class LitSparseInst(pl.LightningModule):
         # Draw mask
         for batch_idx in range(batch):
             for inst_idx in range(self.num_instances):
-                if torch.sigmoid(torch.max(class_logits[batch_idx,inst_idx,:])) > self.score_threshold:
+                class_pred = torch.sigmoid(torch.max(class_logits[batch_idx,inst_idx,:]))
+                score_pred = torch.sigmoid(score_logits[batch_idx,inst_idx])
+                if torch.sqrt(class_pred * score_pred) > self.score_threshold:
                     maskmaps[batch_idx,0,:,:] = torch.maximum(maskmaps[batch_idx,0,:,:], mask_preds[batch_idx,inst_idx,:,:] * (float(inst_idx+1)%8/7))
                     maskmaps[batch_idx,1,:,:] = torch.maximum(maskmaps[batch_idx,1,:,:], mask_preds[batch_idx,inst_idx,:,:] * (float(inst_idx+1)%4/3))
                     maskmaps[batch_idx,2,:,:] = torch.maximum(maskmaps[batch_idx,2,:,:], mask_preds[batch_idx,inst_idx,:,:] * (float(inst_idx+1)%2/1))
