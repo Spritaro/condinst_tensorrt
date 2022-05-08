@@ -179,7 +179,7 @@ class Decoder(nn.Module):
     def forward(self, feature):
         """
         Params:
-            feature: Tensor[batch, D*3, H, W]
+            feature: Tensor[batch, D, H, W]
         Returns:
             class_logits: Tensor[batch, N, C]
             mask_logits: Tensor[batch, N, H, W]
