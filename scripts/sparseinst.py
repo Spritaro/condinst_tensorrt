@@ -20,7 +20,8 @@ class PyramidPoolingModule(nn.Module):
 
         def conv1x1_relu(in_channels, out_channels):
             layers = []
-            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=1, padding=0, bias=True))
+            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=1, padding=0, bias=False))
+            layers.append(nn.BatchNorm2d(out_channels))
             layers.append(nn.ReLU())
             return nn.Sequential(*layers)
         self.convs = nn.ModuleList([conv1x1_relu(in_channels, channels) for i in range(4)])
@@ -126,7 +127,12 @@ class Decoder(nn.Module):
         self.mask_branch = stack_conv3x3_bn_relu(num_channels+2, num_channels, num_stack=4)
         self.mask_projection = nn.Conv2d(num_channels, num_kernel_channels, kernel_size=1, padding=0, bias=True)
 
-        self.f_iam = nn.Conv2d(num_channels, num_instances, kernel_size=3, padding=1, bias=True)
+        def conv3x3_bn(in_channels, out_channels):
+            layers = []
+            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False))
+            layers.append(nn.BatchNorm2d(out_channels))
+            return nn.Sequential(*layers)
+        self.f_iam = conv3x3_bn(num_channels, num_instances)
 
         self.class_head = nn.Linear(num_channels, num_classes)
         self.score_head = nn.Linear(num_channels, 1)
@@ -162,7 +168,7 @@ class Decoder(nn.Module):
         # NOTE: see Focal Loss paper for detail https://arxiv.org/abs/1708.02002
         pi = 0.01
         bias = -math.log((1 - pi) / pi)
-        nn.init.constant_(self.f_iam.bias, bias)
+        nn.init.constant_(self.f_iam[-1].bias, bias)
         nn.init.constant_(self.class_head.bias, bias)
         return
 
