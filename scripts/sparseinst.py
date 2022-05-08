@@ -95,12 +95,12 @@ class Encoder(nn.Module):
 
     def forward(self, c3, c4, c5):
         # FPN
-        p5 = self.lateral_conv5(c5)
-        p4 = self.lateral_conv4(c4) + F.interpolate(p5, scale_factor=2, mode='bilinear', align_corners=False)
-        p3 = self.lateral_conv3(c3) + F.interpolate(p4, scale_factor=2, mode='bilinear', align_corners=False)
-
-        # Pyramid Pooling Module
-        p5 = self.ppm(p5)
+        l5 = self.lateral_conv5(c5)
+        l4 = self.lateral_conv4(c4)
+        l3 = self.lateral_conv3(c3)
+        p5 = self.ppm(l5) # Pyramid Pooling Module
+        p4 = l4 + F.interpolate(p5, scale_factor=2, mode='bilinear', align_corners=False)
+        p3 = l3 + F.interpolate(p4, scale_factor=2, mode='bilinear', align_corners=False)
 
         # 3x3 convs
         x5 = self.conv5(p5)
