@@ -18,14 +18,14 @@ class PyramidPoolingModule(nn.Module):
     def __init__(self, in_channels, channels):
         super().__init__()
 
-        def conv1x1_relu(in_channels, out_channels):
+        def conv1x1_bn_relu(in_channels, out_channels):
             layers = []
             layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=1, padding=0, bias=False))
             layers.append(nn.BatchNorm2d(out_channels))
             layers.append(nn.ReLU())
             return nn.Sequential(*layers)
-        self.convs = nn.ModuleList([conv1x1_relu(in_channels, channels) for i in range(4)])
-        self.out_conv = conv1x1_relu(in_channels+channels*4, in_channels)
+        self.convs = nn.ModuleList([conv1x1_bn_relu(in_channels, channels) for i in range(4)])
+        self.out_conv = conv1x1_bn_relu(in_channels+channels*4, in_channels)
         return
 
     def forward(self, in_feature):
