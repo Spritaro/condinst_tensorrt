@@ -37,12 +37,16 @@ class PyramidPoolingModule(nn.Module):
         """
         batch, D, H, W = in_feature.shape
 
-        divs = [1, 2, 4, 8]
+        # NOTE: TensorRT7 does not support F.adaptive_avg_pool2d
+        def adaptive_avg_pool2d(feature, output_size):
+            stride = (H//output_size, W//output_size)
+            kernel_size = (H-(output_size-1)*stride[0], W-(output_size-1)*stride[1])
+            feature = F.avg_pool2d(feature, kernel_size=kernel_size, stride=kernel_size, padding=0)
+            return feature
+        output_sizes = [1, 2, 3, 6]
         xs = [in_feature]
-        for div, conv in zip(divs, self.convs):
-            # NOTE: TensorRT7 does not support AdaptiveAvgPool2d
-            kernel_size = (H//div, W//div)
-            x = F.avg_pool2d(in_feature, kernel_size=kernel_size, stride=kernel_size, padding=0)
+        for output_size, conv in zip(output_sizes, self.convs):
+            x = adaptive_avg_pool2d(in_feature, output_size)
             x = conv(x)
             x = F.interpolate(x, size=(H, W), mode='bilinear', align_corners=False)
             xs.append(x)
