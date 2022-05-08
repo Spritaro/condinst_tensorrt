@@ -14,41 +14,41 @@ from torchvision.ops.focal_loss import sigmoid_focal_loss
 from loss import dice_score_matrix, dice_loss_vector
 
 
-# class PyramidPoolingModule(nn.Module):
-#     def __init__(self, in_channels, channels):
-#         super().__init__()
+class PyramidPoolingModule(nn.Module):
+    def __init__(self, in_channels, channels):
+        super().__init__()
 
-#         self.convs = nn.ModuleList(
-#             [nn.Sequential(
-#                 nn.Conv2d(in_channels, channels, kernel_size=1, padding=0, bias=True),
-#                 nn.ReLU()) for i in range(4)])
-#         self.out_conv = nn.Sequential(
-#             nn.Conv2d(in_channels + channels * 4, in_channels, kernel_size=1, padding=0, bias=True),
-#             nn.ReLU())
-#         return
+        def conv1x1_relu(in_channels, out_channels):
+            layers = []
+            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=1, padding=0, bias=True))
+            layers.append(nn.ReLU())
+            return nn.Sequential(*layers)
+        self.convs = nn.ModuleList([conv1x1_relu(in_channels, channels) for i in range(4)])
+        self.out_conv = conv1x1_relu(in_channels+channels*4, in_channels)
+        return
 
-#     def forward(self, in_feature):
-#         """
-#         Params:
-#             in_feature: Tensor[batch, D, H, W]
-#         Returns:
-#             out_feature: Tensor[batch, D, H, W]
-#         """
-#         batch, D, H, W = in_feature.shape
+    def forward(self, in_feature):
+        """
+        Params:
+            in_feature: Tensor[batch, D, H, W]
+        Returns:
+            out_feature: Tensor[batch, D, H, W]
+        """
+        batch, D, H, W = in_feature.shape
 
-#         divs = [1, 2, 4, 8]
-#         xs = [in_feature]
-#         for div, conv in zip(divs, self.convs):
-#             # NOTE: TensorRT7 does not support AdaptiveAvgPool2d
-#             kernel_size = (H//div, W//div)
-#             x = F.avg_pool2d(in_feature, kernel_size=kernel_size, stride=kernel_size, padding=0)
-#             x = conv(x)
-#             x = F.interpolate(x, size=(H, W), mode='bilinear', align_corners=False)
-#             xs.append(x)
+        divs = [1, 2, 4, 8]
+        xs = [in_feature]
+        for div, conv in zip(divs, self.convs):
+            # NOTE: TensorRT7 does not support AdaptiveAvgPool2d
+            kernel_size = (H//div, W//div)
+            x = F.avg_pool2d(in_feature, kernel_size=kernel_size, stride=kernel_size, padding=0)
+            x = conv(x)
+            x = F.interpolate(x, size=(H, W), mode='bilinear', align_corners=False)
+            xs.append(x)
 
-#         x = torch.cat(xs, dim=1)
-#         out_feature = self.out_conv(x)
-#         return out_feature
+        x = torch.cat(xs, dim=1)
+        out_feature = self.out_conv(x)
+        return out_feature
 
 
 class Encoder(nn.Module):
@@ -64,7 +64,7 @@ class Encoder(nn.Module):
         self.lateral_conv4 = conv1x1_bn(1024, num_channels)
         self.lateral_conv5 = conv1x1_bn(2048, num_channels)
 
-        # self.ppm = PyramidPoolingModule(num_channels, num_channels//4)
+        self.ppm = PyramidPoolingModule(num_channels, num_channels//4)
 
         def conv3x3_bn(in_channels, out_channels):
             layers = []
@@ -89,15 +89,13 @@ class Encoder(nn.Module):
         return
 
     def forward(self, c3, c4, c5):
-        # TODO: add Pyarmid Pooling Module
-
         # FPN
         p5 = self.lateral_conv5(c5)
         p4 = self.lateral_conv4(c4) + F.interpolate(p5, scale_factor=2, mode='bilinear', align_corners=False)
         p3 = self.lateral_conv3(c3) + F.interpolate(p4, scale_factor=2, mode='bilinear', align_corners=False)
 
-        # # Pyramid Pooling Module
-        # p5 = self.ppm(p5)
+        # Pyramid Pooling Module
+        p5 = self.ppm(p5)
 
         # 3x3 convs
         x5 = self.conv5(p5)
