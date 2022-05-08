@@ -192,8 +192,7 @@ class Decoder(nn.Module):
         iam = self.f_iam(inst_feature) # [batch, N, H, W]
         iam = iam.sigmoid()
         iam = iam.view(batch, -1, H*W) # [batch, N, (H*W)]
-        # NOTE: Detach denominator for normalization https://discuss.pytorch.org/t/how-to-normalize-embedding-vectors/1209/3
-        iam = iam / (iam.sum(dim=2, keepdim=True) + 1e-6).detach()
+        iam = iam / (iam.sum(dim=2, keepdim=True) + 1e-6) # Normalize
 
         # Instance aware feature
         inst_feature = inst_feature.view(batch, D, -1) # [batch, D, (H*W)]
