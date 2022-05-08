@@ -126,9 +126,7 @@ class Decoder(nn.Module):
         self.mask_branch = stack_conv3x3_bn_relu(num_channels+2, num_channels, num_stack=4)
         self.mask_projection = nn.Conv2d(num_channels, num_kernel_channels, kernel_size=1, padding=0, bias=True)
 
-        self.f_iam = nn.Sequential(
-            nn.Conv2d(num_channels, num_instances, kernel_size=3, padding=1, bias=True),
-            nn.Sigmoid())
+        self.f_iam = nn.Conv2d(num_channels, num_instances, kernel_size=3, padding=1, bias=True)
 
         self.class_head = nn.Linear(num_channels, num_classes)
         self.score_head = nn.Linear(num_channels, 1)
@@ -164,7 +162,7 @@ class Decoder(nn.Module):
         # NOTE: see Focal Loss paper for detail https://arxiv.org/abs/1708.02002
         pi = 0.01
         bias = -math.log((1 - pi) / pi)
-        nn.init.constant_(self.f_iam[0].bias, bias)
+        nn.init.constant_(self.f_iam.bias, bias)
         nn.init.constant_(self.class_head.bias, bias)
         return
 
@@ -182,6 +180,7 @@ class Decoder(nn.Module):
 
         # Instance activation map
         iam = self.f_iam(inst_feature) # [batch, N, H, W]
+        iam = iam.sigmoid()
         iam = iam.view(batch, -1, H*W) # [batch, N, (H*W)]
         iam = iam / (iam.sum(dim=2, keepdim=True) + 1e-6) # Normalize
 
