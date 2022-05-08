@@ -122,11 +122,12 @@ class LitSparseInst(pl.LightningModule):
         maskmaps = torch.zeros_like(resized_images)
 
         # Draw mask
+        class_pred = torch.sigmoid(class_logits.max(dim=-1)[0])
+        score_pred = torch.sigmoid(score_logits.squeeze(dim=-1))
+        score = torch.sqrt(class_pred * score_pred)
         for batch_idx in range(batch):
             for inst_idx in range(self.num_instances):
-                class_pred = torch.sigmoid(torch.max(class_logits[batch_idx,inst_idx,:]))
-                score_pred = torch.sigmoid(score_logits[batch_idx,inst_idx])
-                if torch.sqrt(class_pred * score_pred) > self.score_threshold:
+                if score[batch_idx,inst_idx] > self.score_threshold:
                     maskmaps[batch_idx,0,:,:] = torch.maximum(maskmaps[batch_idx,0,:,:], mask_preds[batch_idx,inst_idx,:,:] * (float(inst_idx+1)%8/7))
                     maskmaps[batch_idx,1,:,:] = torch.maximum(maskmaps[batch_idx,1,:,:], mask_preds[batch_idx,inst_idx,:,:] * (float(inst_idx+1)%4/3))
                     maskmaps[batch_idx,2,:,:] = torch.maximum(maskmaps[batch_idx,2,:,:], mask_preds[batch_idx,inst_idx,:,:] * (float(inst_idx+1)%2/1))
