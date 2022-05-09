@@ -168,12 +168,13 @@ class Decoder(nn.Module):
         self.score_head.apply(initialize_head)
         self.kernel_head.apply(initialize_head)
 
-        # Initialize last layer of F-iam and class head
+        # Initialize head bias
         # NOTE: see Focal Loss paper for detail https://arxiv.org/abs/1708.02002
         pi = 0.01
         bias = -math.log((1 - pi) / pi)
         nn.init.constant_(self.f_iam[-1].bias, bias)
         nn.init.constant_(self.class_head.bias, bias)
+        nn.init.constant_(self.score_head.bias, bias)
         return
 
     def forward(self, feature):
