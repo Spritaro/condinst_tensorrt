@@ -299,11 +299,12 @@ if __name__ == '__main__':
                 masks = masks.to('cpu').detach().numpy().copy()
 
                 # Post processing
-                num_objects, = probs[probs > args.score_threshold].shape
+                idxs = (probs > args.score_threshold)
+                num_objects, = probs[idxs].shape
                 print("{} obects detected".format(num_objects))
 
                 if num_objects > 0:
-                    masks = masks[0,:num_objects,:,:]
+                    masks = masks[idxs]
                 else:
                     masks = np.zeros((1, args.input_height, args.input_width), dtype=np.float32)
 
