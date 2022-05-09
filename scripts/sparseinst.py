@@ -22,7 +22,7 @@ class PyramidPoolingModule(nn.Module):
             layers = []
             layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=1, padding=0, bias=False))
             layers.append(nn.BatchNorm2d(out_channels))
-            layers.append(nn.ReLU())
+            layers.append(nn.ReLU(inplace=True))
             return nn.Sequential(*layers)
         self.convs = nn.ModuleList([conv1x1_bn_relu(in_channels, channels) for i in range(4)])
         self.out_conv = conv1x1_bn_relu(in_channels+channels*4, in_channels)
@@ -124,7 +124,7 @@ class Decoder(nn.Module):
             for i in range(num_stack):
                 layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False))
                 layers.append(nn.BatchNorm2d(out_channels))
-                layers.append(nn.ReLU())
+                layers.append(nn.ReLU(inplace=True))
                 in_channels = out_channels
             return nn.Sequential(*layers)
         self.inst_branch = stack_conv3x3_bn_relu(num_channels+2, num_channels, num_stack=4)
