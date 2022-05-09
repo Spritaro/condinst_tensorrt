@@ -458,7 +458,7 @@ class SparseInst(nn.Module):
         device = mask_preds.device
 
         stack_score_logits = score_logits[inst_idxs,:].view(-1) # [min(N, K)]
-        stack_mask_preds = mask_preds[inst_idxs,:,:] # [min(N, K), maskH, maskW]
+        stack_mask_preds = mask_preds[inst_idxs,:,:].detach() # [min(N, K), maskH, maskW]
         stack_mask_targets = mask_targets[target_idxs,:,:] # [min(N, K), maskH, maskW]
 
         # Mask-IoU
@@ -468,7 +468,7 @@ class SparseInst(nn.Module):
         union = stack_mask_preds.sum(dim=(1,2)) + stack_mask_targets.sum(dim=(1,2)) - intersection
         score_target = intersection / (union + eps)
 
-        score_loss = F.binary_cross_entropy_with_logits(stack_score_logits, score_target.detach(), reduction='none')
+        score_loss = F.binary_cross_entropy_with_logits(stack_score_logits, score_target, reduction='none')
         return score_loss
 
     def calculate_mask_loss(self, inst_idxs, target_idxs, mask_logits, mask_preds, mask_targets):
