@@ -82,15 +82,15 @@ class Encoder(nn.Module):
 
         self.encoder_projection = conv1x1_bn(num_channels * 3, num_channels)
 
-        def initialize(m):
+        def initialize_encoder(m):
             if isinstance(m, nn.Conv2d):
-                nn.init.normal_(m.weight, std=0.01)
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
-        self.apply(initialize)
+        self.apply(initialize_encoder)
         return
 
     def forward(self, c3, c4, c5):
