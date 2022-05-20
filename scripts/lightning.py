@@ -4,6 +4,7 @@ import torchvision
 import pytorch_lightning as pl
 
 from sparseinst import SparseInst
+from loss import SparseInstLoss
 from mean_average_precision import MeanAveragePrecision
 
 class LitSparseInst(pl.LightningModule):
@@ -20,6 +21,7 @@ class LitSparseInst(pl.LightningModule):
         self.mask_loss_factor = mask_loss_factor
 
         self.sparseinst = SparseInst(mode, input_channels, num_classes, num_instances)
+        self.sparseinst_loss = SparseInstLoss()
 
         # mAP calculation
         self.map = MeanAveragePrecision(
@@ -37,7 +39,7 @@ class LitSparseInst(pl.LightningModule):
         images = torch.stack(images, dim=0)
 
         class_logits, score_logits, mask_logits = self(images)
-        class_loss, score_loss, mask_loss = self.sparseinst.loss(class_logits, score_logits, mask_logits, targets)
+        class_loss, score_loss, mask_loss = self.sparseinst_loss(class_logits, score_logits, mask_logits, targets)
         loss = (self.class_loss_factor * class_loss +
                 self.score_loss_factor * score_loss +
                 self.mask_loss_factor * mask_loss)
@@ -66,7 +68,7 @@ class LitSparseInst(pl.LightningModule):
         images = torch.stack(images, dim=0)
 
         class_logits, score_logits, mask_logits = self(images)
-        class_loss, score_loss, mask_loss = self.sparseinst.loss(class_logits, score_logits, mask_logits, targets)
+        class_loss, score_loss, mask_loss = self.sparseinst_loss(class_logits, score_logits, mask_logits, targets)
         loss = (self.class_loss_factor * class_loss +
                 self.score_loss_factor * score_loss +
                 self.mask_loss_factor * mask_loss)
