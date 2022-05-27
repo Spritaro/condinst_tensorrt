@@ -104,7 +104,7 @@ if __name__ == '__main__':
 
         # Transform for training
         transform_train = A.Compose([
-            A.Affine(scale={'x': (0.7, 1.5), 'y': (0.7, 1.5)}, translate_percent={'x': (-0.5, 0.5), 'y': (-0.2, 0.2)}, rotate=(-90, 90), interpolation=cv2.INTER_LINEAR, mode=cv2.BORDER_CONSTANT, p=0.8),
+            A.Affine(scale={'x': (0.7, 1.5), 'y': (0.7, 1.5)}, translate_percent={'x': (-0.2, 0.2), 'y': (-0.2, 0.2)}, rotate=(-90, 90), interpolation=cv2.INTER_LINEAR, mode=cv2.BORDER_CONSTANT, p=0.8),
             A.transforms.PadIfNeeded(min_width=args.input_width, min_height=args.input_height, border_mode=cv2.BORDER_CONSTANT, value=0),
             A.RandomCrop(width=args.input_width, height=args.input_height),
             A.HorizontalFlip(p=0.5),
