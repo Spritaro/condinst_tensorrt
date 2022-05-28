@@ -74,8 +74,12 @@ class SparseInstLoss(nn.Module):
         class_losses = []
         score_losses = []
         mask_losses = []
+        total_K = 0
         for batch_idx in range(batch):
-            K = len(targets[batch_idx]) # number of targets per batch
+            # NOTE: remove targets with zero area
+            targets_in_batch = [target for target in targets[batch_idx] if target['segmentation'].sum() > 0]
+            K = len(targets_in_batch) # number of targets in this batch
+            total_K += K
 
             c = class_logits[batch_idx] # [N, C]
             s = score_logits[batch_idx] # [N, 1]
@@ -88,8 +92,8 @@ class SparseInstLoss(nn.Module):
                 class_losses.append(class_loss)
                 continue
 
-            label_targets = torch.as_tensor([targets[batch_idx][target_idx]['class_labels'] for target_idx in range(K)], dtype=torch.long, device=device) # [K]
-            mask_targets = torch.stack([torch.from_numpy(targets[batch_idx][target_idx]['segmentation']).to(dtype).to(device) for target_idx in range(K)]) # [K, imageH, imageW]
+            label_targets = torch.as_tensor([targets_in_batch[target_idx]['class_labels'] for target_idx in range(K)], dtype=torch.long, device=device) # [K]
+            mask_targets = torch.stack([torch.from_numpy(targets_in_batch[target_idx]['segmentation']).to(dtype).to(device) for target_idx in range(K)]) # [K, imageH, imageW]
 
             # Downsample target mask to 1/4 of input size
             mask_targets = F.avg_pool2d(mask_targets, kernel_size=4, stride=4, padding=0) # [K, maskH, maskW]
@@ -110,7 +114,6 @@ class SparseInstLoss(nn.Module):
             mask_losses.append(mask_loss)
 
         # NOTE: Divide loss by total number of targets across batches to avoid overfitting to images with small number of targets
-        total_K = sum([len(t) for t in targets])
         if total_K == 0:
             class_loss = torch.stack(class_losses).mean()
             score_loss = torch.as_tensor(0).to(score_logits)
