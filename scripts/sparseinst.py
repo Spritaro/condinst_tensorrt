@@ -132,7 +132,6 @@ class Decoder(nn.Module):
         self.f_iam = conv3x3_bn(num_channels, num_instances)
 
         self.class_head = nn.Linear(num_channels, num_classes)
-        self.score_head = nn.Linear(num_channels, 1)
         self.kernel_head = nn.Linear(num_channels, num_kernel_channels)
 
         # Initialize
@@ -158,7 +157,6 @@ class Decoder(nn.Module):
                 nn.init.constant_(m.bias, 0)
         self.f_iam.apply(initialize_head)
         self.class_head.apply(initialize_head)
-        self.score_head.apply(initialize_head)
         self.kernel_head.apply(initialize_head)
 
         # Initialize head bias
@@ -167,7 +165,6 @@ class Decoder(nn.Module):
         bias = -math.log((1 - pi) / pi)
         nn.init.constant_(self.f_iam[-1].bias, bias)
         nn.init.constant_(self.class_head.bias, bias)
-        nn.init.constant_(self.score_head.bias, bias)
         return
 
     def forward(self, feature):
@@ -195,7 +192,6 @@ class Decoder(nn.Module):
 
         # Heads
         class_logits = self.class_head(inst_aware_feature) # [batch, N, C]
-        score_logits = self.score_head(inst_aware_feature) # [batch, N, 1]
         kernel_logits = self.kernel_head(inst_aware_feature) # [batch, N, kernel]
 
         # Mask branch
@@ -203,7 +199,7 @@ class Decoder(nn.Module):
         mask_feature = self.mask_projection(mask_feature) # [batch, kernel, H, W]
         mask_logits = self.generate_mask(kernel_logits, mask_feature) # [batch, 1, H, W]
 
-        return class_logits, score_logits, mask_logits
+        return class_logits, mask_logits
 
     def generate_mask(self, kernel_logits, mask_feature):
         """
@@ -266,16 +262,13 @@ class SparseInst(nn.Module):
 
         feature = self.encoder(c3, c4, c5) # 1/8
         feature = self.add_coordinate(feature)
-        class_logits, score_logits, mask_logits = self.decoder(feature)
+        class_logits, mask_logits = self.decoder(feature)
 
         if self.mode == 'training':
-            return class_logits, score_logits, mask_logits
+            return class_logits, mask_logits
         else:
             class_preds = torch.sigmoid(class_logits) # classification predictions
-            score_preds = torch.sigmoid(score_logits) # objectness score predictions
-            scores = torch.sqrt(class_preds * score_preds) # [batch, N, C]
-            # scores = class_preds
-            scores, labels = torch.max(scores, dim=2)
+            scores, labels = torch.max(class_preds, dim=2)
             return labels.int(), scores.float(), mask_logits.float()
 
     def add_coordinate(self, feature):
