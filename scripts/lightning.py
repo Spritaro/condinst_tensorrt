@@ -38,9 +38,10 @@ class LitSparseInst(pl.LightningModule):
         targets = [tgt for _, tgt in batch]
         images = torch.stack(images, dim=0)
 
-        class_logits, mask_logits = self(images)
-        class_loss, mask_loss = self.sparseinst_loss(class_logits, mask_logits, targets)
+        class_logits, score_logits, mask_logits = self(images)
+        class_loss, score_loss, mask_loss = self.sparseinst_loss(class_logits, score_logits, mask_logits, targets)
         loss = (self.class_loss_factor * class_loss +
+                self.score_loss_factor * score_loss +
                 self.mask_loss_factor * mask_loss)
 
         # TensorBoard
@@ -48,11 +49,12 @@ class LitSparseInst(pl.LightningModule):
             # Display loss
             tensorboard = self.logger.experiment
             tensorboard.add_scalar("class_loss", class_loss, self.global_step)
+            tensorboard.add_scalar("score_loss", score_loss, self.global_step)
             tensorboard.add_scalar("mask_loss", mask_loss, self.global_step)
             tensorboard.add_scalar("loss", loss, self.global_step)
             # Display masks
             mask_preds = torch.sigmoid(mask_logits)
-            images_and_masks = self.concat_images_and_masks(images[:,:3,:,:], class_logits, mask_preds)
+            images_and_masks = self.concat_images_and_masks(images[:,:3,:,:], class_logits, score_logits, mask_preds)
             img_grid = torchvision.utils.make_grid(images_and_masks, nrow=images.shape[0])
             tensorboard.add_image('images', img_grid, global_step=self.global_step)
 
@@ -65,14 +67,16 @@ class LitSparseInst(pl.LightningModule):
         targets = [tgt for _, tgt in batch]
         images = torch.stack(images, dim=0)
 
-        class_logits, mask_logits = self(images)
-        class_loss, mask_loss = self.sparseinst_loss(class_logits, mask_logits, targets)
+        class_logits, score_logits, mask_logits = self(images)
+        class_loss, score_loss, mask_loss = self.sparseinst_loss(class_logits, score_logits, mask_logits, targets)
         loss = (self.class_loss_factor * class_loss +
+                self.score_loss_factor * score_loss +
                 self.mask_loss_factor * mask_loss)
 
         # TensorBoard
         tensorboard = self.logger.experiment
         tensorboard.add_scalar("val_class_loss", class_loss, self.global_step)
+        tensorboard.add_scalar("val_score_loss", score_loss, self.global_step)
         tensorboard.add_scalar("val_mask_loss", mask_loss, self.global_step)
         tensorboard.add_scalar("val_loss", loss, self.global_step)
 
@@ -102,11 +106,12 @@ class LitSparseInst(pl.LightningModule):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=1e-4)
         return optimizer
 
-    def concat_images_and_masks(self, images, class_logits, mask_preds):
+    def concat_images_and_masks(self, images, class_logits, score_logits, mask_preds):
         """
         Params:
             images: Tensor[batch, 3, imageH, imageW]
             class_logits: Tensor[batch, N, C]
+            score_logits: Tensor[batch, N, 1]
             mask_preds: Tensor[batch, N, H, W]
         Returns:
             images_and_depths: Tensor[batch*2, 3, H, W]
@@ -120,9 +125,11 @@ class LitSparseInst(pl.LightningModule):
 
         # Draw mask
         class_pred = torch.sigmoid(class_logits.max(dim=-1)[0])
+        score_pred = torch.sigmoid(score_logits.squeeze(dim=-1))
+        score = torch.sqrt(class_pred * score_pred)
         for batch_idx in range(batch):
             for inst_idx in range(self.num_instances):
-                if class_pred[batch_idx,inst_idx] > self.score_threshold:
+                if score[batch_idx,inst_idx] > self.score_threshold:
                     maskmaps[batch_idx,0,:,:] = torch.maximum(maskmaps[batch_idx,0,:,:], mask_preds[batch_idx,inst_idx,:,:] * (float(inst_idx+1)%8/7))
                     maskmaps[batch_idx,1,:,:] = torch.maximum(maskmaps[batch_idx,1,:,:], mask_preds[batch_idx,inst_idx,:,:] * (float(inst_idx+1)%4/3))
                     maskmaps[batch_idx,2,:,:] = torch.maximum(maskmaps[batch_idx,2,:,:], mask_preds[batch_idx,inst_idx,:,:] * (float(inst_idx+1)%2/1))
