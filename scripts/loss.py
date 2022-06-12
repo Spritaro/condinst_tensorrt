@@ -43,8 +43,15 @@ def dice_loss_vector(inputs, targets, eps=1e-6):
     N = inputs.shape[0]
     inputs = inputs.view(N, -1)
     targets = targets.view(N, -1)
+    dtype = inputs.dtype
+
+    # Convert to FP32 to avoid NaN
+    inputs = inputs.type(torch.float32)
+    targets = targets.type(torch.float32)
 
     dice = (2 * (inputs*targets).sum(dim=1)) / ((inputs*inputs).sum(dim=1) + (targets*targets).sum(dim=1) + eps)
+
+    dice = dice.type(dtype)
     return 1 - dice
 
 
