@@ -236,13 +236,13 @@ class SparseInst(nn.Module):
         self.encoder = Encoder(num_channels)
         self.decoder = Decoder(num_classes, num_instances, num_channels, num_kernel_channels)
 
-        # def freeze_bn(m):
-        #     if isinstance(m, nn.BatchNorm2d):
-        #         # m.track_running_stats = False
-        #         m.weight.requires_grad = False
-        #         m.bias.requires_grad = False
-        #         # m.eval()
-        # self.backbone.apply(freeze_bn)
+        def freeze_bn(m):
+            if isinstance(m, nn.BatchNorm2d):
+                # m.track_running_stats = False
+                m.weight.requires_grad = False
+                m.bias.requires_grad = False
+                # m.eval()
+        self.backbone.apply(freeze_bn)
 
         # Change number of input channels
         if input_channels != 3:
