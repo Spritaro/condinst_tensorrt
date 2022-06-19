@@ -201,7 +201,7 @@ class Decoder(nn.Module):
         # Mask branch
         mask_feature = self.mask_branch(feature)
         mask_feature = self.mask_projection(mask_feature) # [batch, kernel, H, W]
-        mask_logits = self.generate_mask(kernel_logits, mask_feature) # [batch, 1, H, W]
+        mask_logits = self.generate_mask(kernel_logits, mask_feature) # [batch, N, H, W]
 
         return class_logits, score_logits, mask_logits
 
