@@ -11,14 +11,13 @@ class PyramidPoolingModule(nn.Module):
     def __init__(self, in_channels, channels):
         super().__init__()
 
-        def conv1x1_bn_relu(in_channels, out_channels):
+        def conv1x1_relu(in_channels, out_channels):
             layers = []
-            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=1, padding=0, bias=False))
-            layers.append(nn.BatchNorm2d(out_channels))
+            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=1, padding=0, bias=True))
             layers.append(nn.ReLU(inplace=True))
             return nn.Sequential(*layers)
-        self.convs = nn.ModuleList([conv1x1_bn_relu(in_channels, channels) for i in range(4)])
-        self.out_conv = conv1x1_bn_relu(in_channels+channels*4, in_channels)
+        self.convs = nn.ModuleList([conv1x1_relu(in_channels, channels) for i in range(4)])
+        self.out_conv = conv1x1_relu(in_channels+channels*4, in_channels)
         return
 
     def forward(self, in_feature):
@@ -53,36 +52,31 @@ class Encoder(nn.Module):
     def __init__(self, num_channels):
         super().__init__()
 
-        def conv1x1_bn(in_channels, out_channels):
+        def conv1x1(in_channels, out_channels):
             layers = []
-            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=1, padding=0, bias=False))
-            layers.append(nn.BatchNorm2d(out_channels))
+            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=1, padding=0, bias=True))
             return nn.Sequential(*layers)
-        self.lateral_conv3 = conv1x1_bn(512, num_channels)
-        self.lateral_conv4 = conv1x1_bn(1024, num_channels)
-        self.lateral_conv5 = conv1x1_bn(2048, num_channels)
+        self.lateral_conv3 = conv1x1(512, num_channels)
+        self.lateral_conv4 = conv1x1(1024, num_channels)
+        self.lateral_conv5 = conv1x1(2048, num_channels)
 
         self.ppm = PyramidPoolingModule(num_channels, num_channels//4)
 
-        def conv3x3_bn(in_channels, out_channels):
+        def conv3x3(in_channels, out_channels):
             layers = []
-            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False))
-            layers.append(nn.BatchNorm2d(out_channels))
+            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=True))
             return nn.Sequential(*layers)
-        self.conv3 = conv3x3_bn(num_channels, num_channels)
-        self.conv4 = conv3x3_bn(num_channels, num_channels)
-        self.conv5 = conv3x3_bn(num_channels, num_channels)
+        self.conv3 = conv3x3(num_channels, num_channels)
+        self.conv4 = conv3x3(num_channels, num_channels)
+        self.conv5 = conv3x3(num_channels, num_channels)
 
-        self.encoder_projection = conv1x1_bn(num_channels * 3, num_channels)
+        self.encoder_projection = conv1x1(num_channels * 3, num_channels)
 
         def initialize_encoder(m):
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
         self.apply(initialize_encoder)
         return
 
@@ -112,24 +106,18 @@ class Decoder(nn.Module):
     def __init__(self, num_classes, num_instances, num_channels, num_kernel_channels):
         super().__init__()
 
-        def stack_conv3x3_bn_relu(in_channels, out_channels, num_stack):
+        def stack_conv3x3_relu(in_channels, out_channels, num_stack):
             layers = []
             for i in range(num_stack):
-                layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False))
-                layers.append(nn.BatchNorm2d(out_channels))
+                layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=True))
                 layers.append(nn.ReLU(inplace=True))
                 in_channels = out_channels
             return nn.Sequential(*layers)
-        self.inst_branch = stack_conv3x3_bn_relu(num_channels+2, num_channels, num_stack=4)
-        self.mask_branch = stack_conv3x3_bn_relu(num_channels+2, num_channels, num_stack=4)
+        self.inst_branch = stack_conv3x3_relu(num_channels+2, num_channels, num_stack=4)
+        self.mask_branch = stack_conv3x3_relu(num_channels+2, num_channels, num_stack=4)
         self.mask_projection = nn.Conv2d(num_channels, num_kernel_channels, kernel_size=1, padding=0, bias=True)
 
-        def conv3x3_bn(in_channels, out_channels):
-            layers = []
-            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False))
-            layers.append(nn.BatchNorm2d(out_channels))
-            return nn.Sequential(*layers)
-        self.f_iam = conv3x3_bn(num_channels, num_instances)
+        self.f_iam = nn.Conv2d(num_channels, num_instances, kernel_size=3, padding=1, bias=True)
 
         self.class_head = nn.Linear(num_channels, num_classes)
         self.score_head = nn.Linear(num_channels, 1)
@@ -141,9 +129,6 @@ class Decoder(nn.Module):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
         self.inst_branch.apply(initialize_branch)
         self.mask_branch.apply(initialize_branch)
         self.mask_projection.apply(initialize_branch)
@@ -153,9 +138,6 @@ class Decoder(nn.Module):
                 nn.init.normal_(m.weight, std=0.01)
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
         self.f_iam.apply(initialize_head)
         self.class_head.apply(initialize_head)
         self.score_head.apply(initialize_head)
@@ -165,7 +147,7 @@ class Decoder(nn.Module):
         # NOTE: see Focal Loss paper for detail https://arxiv.org/abs/1708.02002
         pi = 0.01
         bias = -math.log((1 - pi) / pi)
-        nn.init.constant_(self.f_iam[-1].bias, bias)
+        nn.init.constant_(self.f_iam.bias, bias)
         nn.init.constant_(self.class_head.bias, bias)
         nn.init.constant_(self.score_head.bias, bias)
         return
