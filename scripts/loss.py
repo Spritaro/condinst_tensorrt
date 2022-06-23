@@ -224,8 +224,8 @@ class SparseInstLoss(nn.Module):
         stack_mask_targets = mask_targets[target_idxs,:,:] # [min(N, K), maskH, maskW]
 
         # Mask-IoU
-        stack_mask_preds = (stack_mask_preds > 0.3).float()
-        stack_mask_targets = (stack_mask_targets > 0.3).float()
+        stack_mask_preds = (stack_mask_preds > 0.5).float()
+        stack_mask_targets = (stack_mask_targets > 0.5).float()
         intersection = (stack_mask_preds * stack_mask_targets).sum(dim=(1,2))
         union = stack_mask_preds.sum(dim=(1,2)) + stack_mask_targets.sum(dim=(1,2)) - intersection
         score_target = intersection / (union + eps)
