@@ -38,7 +38,7 @@ class LitSparseInst(pl.LightningModule):
         targets = [tgt for _, tgt in batch]
         images = torch.stack(images, dim=0)
 
-        class_logits, score_logits, mask_logits = self(images)
+        class_logits, score_logits, mask_logits, iam = self(images)
         class_loss, score_loss, mask_loss = self.sparseinst_loss(class_logits, score_logits, mask_logits, targets)
         loss = (self.class_loss_factor * class_loss +
                 self.score_loss_factor * score_loss +
@@ -54,7 +54,7 @@ class LitSparseInst(pl.LightningModule):
             tensorboard.add_scalar("loss", loss, self.global_step)
             # Display masks
             mask_preds = torch.sigmoid(mask_logits)
-            images_and_masks = self.concat_images_and_masks(images[:,:3,:,:], class_logits, score_logits, mask_preds)
+            images_and_masks = self.concat_images_and_masks(images[:,:3,:,:], class_logits, score_logits, mask_preds, iam)
             img_grid = torchvision.utils.make_grid(images_and_masks, nrow=images.shape[0])
             tensorboard.add_image('images', img_grid, global_step=self.global_step)
 
@@ -67,7 +67,7 @@ class LitSparseInst(pl.LightningModule):
         targets = [tgt for _, tgt in batch]
         images = torch.stack(images, dim=0)
 
-        class_logits, score_logits, mask_logits = self(images)
+        class_logits, score_logits, mask_logits, iam = self(images)
         class_loss, score_loss, mask_loss = self.sparseinst_loss(class_logits, score_logits, mask_logits, targets)
         loss = (self.class_loss_factor * class_loss +
                 self.score_loss_factor * score_loss +
@@ -106,13 +106,14 @@ class LitSparseInst(pl.LightningModule):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=1e-4)
         return optimizer
 
-    def concat_images_and_masks(self, images, class_logits, score_logits, mask_preds):
+    def concat_images_and_masks(self, images, class_logits, score_logits, mask_preds, iam=None):
         """
         Params:
             images: Tensor[batch, 3, imageH, imageW]
             class_logits: Tensor[batch, N, C]
             score_logits: Tensor[batch, N, 1]
             mask_preds: Tensor[batch, N, H, W]
+            iam: Tensor[batch, N, H, W]
         Returns:
             images_and_depths: Tensor[batch*2, 3, H, W]
         """
@@ -121,9 +122,8 @@ class LitSparseInst(pl.LightningModule):
 
         resized_images = F.interpolate(images, size=(H, W))
 
-        maskmaps = torch.zeros_like(resized_images)
-
         # Draw mask
+        maskmaps = torch.zeros_like(resized_images)
         class_pred = torch.sigmoid(class_logits.max(dim=-1)[0])
         score_pred = torch.sigmoid(score_logits.squeeze(dim=-1))
         score = torch.sqrt(class_pred * score_pred)
@@ -134,9 +134,18 @@ class LitSparseInst(pl.LightningModule):
                     maskmaps[batch_idx,1,:,:] = torch.maximum(maskmaps[batch_idx,1,:,:], mask_preds[batch_idx,inst_idx,:,:] * (float(inst_idx+1)%4/3))
                     maskmaps[batch_idx,2,:,:] = torch.maximum(maskmaps[batch_idx,2,:,:], mask_preds[batch_idx,inst_idx,:,:] * (float(inst_idx+1)%2/1))
 
+        # Draw iam
+        max_num_iam = 5
+        iammaps = [torch.ones_like(resized_images)] * min(self.num_instances, max_num_iam)
+        for batch_idx in range(batch):
+            for inst_idx in range(min(self.num_instances, max_num_iam)):
+                iammap = iammaps[inst_idx]
+                iammap[batch_idx,1,:,:] = (1-iam[batch_idx,inst_idx,:,:]*20)
+                iammap[batch_idx,2,:,:] = (1-iam[batch_idx,inst_idx,:,:]*20)
+
         # Unnormalize images
         factor = torch.as_tensor([0.229, 0.224, 0.225], device=device)[None,:,None,None].expand(resized_images.shape)
         offset = torch.as_tensor([0.485, 0.456, 0.406], device=device)[None,:,None,None].expand(resized_images.shape)
 
-        images_and_masks = torch.cat([resized_images * factor + offset, maskmaps])
+        images_and_masks = torch.cat([resized_images * factor + offset, maskmaps, *iammaps])
         return images_and_masks

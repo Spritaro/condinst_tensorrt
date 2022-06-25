@@ -189,7 +189,8 @@ class Decoder(nn.Module):
         mask_feature = self.mask_projection(mask_feature) # [batch, kernel, H, W]
         mask_logits = self.generate_mask(kernel_logits, mask_feature) # [batch, N, H, W]
 
-        return class_logits, score_logits, mask_logits
+        iam = iam.view(batch, -1, H, W)
+        return class_logits, score_logits, mask_logits, iam
 
     def generate_mask(self, kernel_logits, mask_feature):
         """
@@ -254,10 +255,10 @@ class SparseInst(nn.Module):
 
         feature = self.encoder(c3, c4, c5) # 1/8
         feature = self.add_coordinate(feature)
-        class_logits, score_logits, mask_logits = self.decoder(feature)
+        class_logits, score_logits, mask_logits, iam = self.decoder(feature)
 
         if self.mode == 'training':
-            return class_logits, score_logits, mask_logits
+            return class_logits, score_logits, mask_logits, iam
         else:
             class_preds = torch.sigmoid(class_logits) # classification predictions
             score_preds = torch.sigmoid(score_logits) # objectness score predictions
