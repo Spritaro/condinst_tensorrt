@@ -77,7 +77,7 @@ class Encoder(nn.Module):
 
         def initialize_encoder(m):
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                nn.init.normal_(m.weight, std=0.01)
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
             elif isinstance(m, nn.BatchNorm2d):
@@ -131,19 +131,7 @@ class Decoder(nn.Module):
         self.kernel_head = nn.Linear(num_channels, num_kernel_channels)
 
         # Initialize
-        def initialize_branch(m):
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-                if m.bias is not None:
-                    nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
-        self.inst_branch.apply(initialize_branch)
-        self.mask_branch.apply(initialize_branch)
-        self.mask_projection.apply(initialize_branch)
-
-        def initialize_head(m):
+        def initialize(m):
             if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
                 nn.init.normal_(m.weight, std=0.01)
                 if m.bias is not None:
@@ -151,10 +139,13 @@ class Decoder(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
-        self.f_iam.apply(initialize_head)
-        self.class_head.apply(initialize_head)
-        self.score_head.apply(initialize_head)
-        self.kernel_head.apply(initialize_head)
+        self.inst_branch.apply(initialize)
+        self.mask_branch.apply(initialize)
+        self.mask_projection.apply(initialize)
+        self.f_iam.apply(initialize)
+        self.class_head.apply(initialize)
+        self.score_head.apply(initialize)
+        self.kernel_head.apply(initialize)
 
         # Initialize head bias
         # NOTE: see Focal Loss paper for detail https://arxiv.org/abs/1708.02002
