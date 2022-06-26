@@ -90,7 +90,6 @@ class SparseInstLoss(nn.Module):
             # NOTE: remove targets with zero area
             targets_in_batch = [target for target in targets[batch_idx] if target['segmentation'].sum() > 0]
             K = len(targets_in_batch) # number of targets in this batch
-            total_K += K
 
             c = class_logits[batch_idx] # [N, C]
             s = score_logits[batch_idx] # [N, 1]
@@ -117,22 +116,16 @@ class SparseInstLoss(nn.Module):
             class_losses.append(class_loss)
 
             # Calculate score loss
-            score_loss = self.calculate_score_loss(assigned_inst_idxs, assigned_target_idxs, s, mp, mask_targets) # [min(N, K)]
+            score_loss = self.calculate_score_loss(assigned_inst_idxs, assigned_target_idxs, s, mp, mask_targets) # []
             score_losses.append(score_loss)
 
             # Calculate mask loss
-            mask_loss = self.calculate_mask_loss(assigned_inst_idxs, assigned_target_idxs, ml, mp, mask_targets) # [min(N, K)]
+            mask_loss = self.calculate_mask_loss(assigned_inst_idxs, assigned_target_idxs, ml, mp, mask_targets) # []
             mask_losses.append(mask_loss)
 
-        # NOTE: Divide loss by total number of targets across batches to avoid overfitting to images with small number of targets
-        if total_K == 0:
             class_loss = torch.stack(class_losses).mean()
-            score_loss = torch.as_tensor(0).to(score_logits)
-            mask_loss = torch.as_tensor(0).to(mask_logits)
-        else:
-            class_loss = torch.stack(class_losses).sum() / total_K
-            score_loss = torch.cat(score_losses).sum() / total_K
-            mask_loss = torch.cat(mask_losses).sum() / total_K
+        score_loss = torch.stack(score_losses).mean()
+        mask_loss = torch.stack(mask_losses).mean()
         return class_loss, score_loss, mask_loss
 
     def generate_score_matrix(self, class_logits, mask_preds, label_targets, mask_targets, alpha=0.8, eps=1e-6):
@@ -198,9 +191,10 @@ class SparseInstLoss(nn.Module):
         Returns:
             class_loss: Tensor[]
         """
+        minNK = len(inst_idxs)
         class_targets = torch.zeros_like(class_logits) # [N, C]
         class_targets[inst_idxs, label_targets[target_idxs]] = 1
-        class_loss = sigmoid_focal_loss(class_logits, class_targets, reduction="sum")
+        class_loss = sigmoid_focal_loss(class_logits, class_targets, reduction="sum") / minNK
         return class_loss
 
     def calculate_score_loss(self, inst_idxs, target_idxs, score_logits, mask_preds, mask_targets, eps=1e-6):
@@ -230,7 +224,7 @@ class SparseInstLoss(nn.Module):
         union = stack_mask_preds.sum(dim=(1,2)) + stack_mask_targets.sum(dim=(1,2)) - intersection
         score_target = intersection / (union + eps)
 
-        score_loss = F.binary_cross_entropy_with_logits(stack_score_logits, score_target, reduction='none')
+        score_loss = F.binary_cross_entropy_with_logits(stack_score_logits, score_target, reduction='mean')
         return score_loss
 
     def calculate_mask_loss(self, inst_idxs, target_idxs, mask_logits, mask_preds, mask_targets):
@@ -248,6 +242,6 @@ class SparseInstLoss(nn.Module):
         stack_mask_preds = mask_preds[inst_idxs,:,:] # [min(N, K), maskH, maskW]
         stack_mask_targets = mask_targets[target_idxs,:,:] # [min(N, K), maskH, maskW]
         dice_loss = dice_loss_vector(stack_mask_preds, stack_mask_targets) # [min(N, K)]
-        bce_loss = F.binary_cross_entropy_with_logits(stack_mask_logits, stack_mask_targets, reduction='none') # [min(N, K), maskH, maskW]
-        mask_loss = dice_loss + bce_loss.mean(dim=(1,2))
+        bce_loss = F.binary_cross_entropy_with_logits(stack_mask_logits, stack_mask_targets, reduction='mean') # []
+        mask_loss = dice_loss + bce_loss
         return mask_loss
