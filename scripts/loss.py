@@ -31,25 +31,23 @@ def dice_score_matrix(inputs, targets, eps=1e-6):
 
     return dice
 
-def dice_loss_vector(inputs, targets, eps=1e-6):
+def calc_dice_loss(inputs, targets, eps=1e-6):
     """
     Params:
         inputs: Tensor[N, *]
         targets: Tensor[N, *]
         smooth:
     Returns:
-        dice_loss: Tensor[N]
+        dice_loss: Tensor[]
     """
-    N = inputs.shape[0]
-    inputs = inputs.view(N, -1)
-    targets = targets.view(N, -1)
-    dtype = inputs.dtype
-
     # Convert to FP32 to avoid NaN
+    dtype = inputs.dtype
     inputs = inputs.type(torch.float32)
     targets = targets.type(torch.float32)
 
-    dice = (2 * (inputs*targets).sum(dim=1)) / ((inputs*inputs).sum(dim=1) + (targets*targets).sum(dim=1) + eps)
+    inputs = inputs.view(-1)
+    targets = targets.view(-1)
+    dice = (2 * (inputs*targets).sum()) / ((inputs*inputs).sum() + (targets*targets).sum() + eps)
 
     dice = dice.type(dtype)
     return 1 - dice
@@ -241,7 +239,7 @@ class SparseInstLoss(nn.Module):
         stack_mask_logits = mask_logits[inst_idxs,:,:] # [min(N, K), maskH, maskW]
         stack_mask_preds = mask_preds[inst_idxs,:,:] # [min(N, K), maskH, maskW]
         stack_mask_targets = mask_targets[target_idxs,:,:] # [min(N, K), maskH, maskW]
-        dice_loss = dice_loss_vector(stack_mask_preds, stack_mask_targets) # [min(N, K)]
+        dice_loss = calc_dice_loss(stack_mask_preds, stack_mask_targets) # []
         bce_loss = F.binary_cross_entropy_with_logits(stack_mask_logits, stack_mask_targets, reduction='mean') # []
         mask_loss = dice_loss + bce_loss
         return mask_loss
