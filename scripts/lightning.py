@@ -136,7 +136,7 @@ class LitSparseInst(pl.LightningModule):
 
         # Draw iam
         max_num_iam = 5
-        iammaps = [torch.ones_like(resized_images)] * min(self.num_instances, max_num_iam)
+        iammaps = [torch.ones_like(resized_images) for _ in range(min(self.num_instances, max_num_iam))]
         for batch_idx in range(batch):
             for inst_idx in range(min(self.num_instances, max_num_iam)):
                 iammap = iammaps[inst_idx]
