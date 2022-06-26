@@ -122,6 +122,9 @@ class LitSparseInst(pl.LightningModule):
 
         resized_images = F.interpolate(images, size=(H, W))
 
+        def pseudo_color(idx, base=5, channel=0):
+            return (float(idx // (base**channel)) % base) / (base - 1)
+
         # Draw mask
         maskmaps = torch.zeros_like(resized_images)
         class_pred = torch.sigmoid(class_logits.max(dim=-1)[0])
@@ -130,9 +133,9 @@ class LitSparseInst(pl.LightningModule):
         for batch_idx in range(batch):
             for inst_idx in range(self.num_instances):
                 if score[batch_idx,inst_idx] > self.score_threshold:
-                    maskmaps[batch_idx,0,:,:] = torch.maximum(maskmaps[batch_idx,0,:,:], mask_preds[batch_idx,inst_idx,:,:] * (float(inst_idx+1)%8/7))
-                    maskmaps[batch_idx,1,:,:] = torch.maximum(maskmaps[batch_idx,1,:,:], mask_preds[batch_idx,inst_idx,:,:] * (float(inst_idx+1)%4/3))
-                    maskmaps[batch_idx,2,:,:] = torch.maximum(maskmaps[batch_idx,2,:,:], mask_preds[batch_idx,inst_idx,:,:] * (float(inst_idx+1)%2/1))
+                    maskmaps[batch_idx,0,:,:] = torch.maximum(maskmaps[batch_idx,0,:,:], mask_preds[batch_idx,inst_idx,:,:] * pseudo_color(inst_idx+1, channel=0))
+                    maskmaps[batch_idx,1,:,:] = torch.maximum(maskmaps[batch_idx,1,:,:], mask_preds[batch_idx,inst_idx,:,:] * pseudo_color(inst_idx+1, channel=1))
+                    maskmaps[batch_idx,2,:,:] = torch.maximum(maskmaps[batch_idx,2,:,:], mask_preds[batch_idx,inst_idx,:,:] * pseudo_color(inst_idx+1, channel=2))
 
         # Draw iam
         max_num_iam = 5
