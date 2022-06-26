@@ -125,6 +125,8 @@ class LitSparseInst(pl.LightningModule):
         def pseudo_color(idx, base=5, channel=0):
             return (float(idx // (base**channel)) % base) / (base - 1)
 
+        inst_idxs_list = [[] for i in range(batch)]
+
         # Draw mask
         maskmaps = torch.zeros_like(resized_images)
         class_pred = torch.sigmoid(class_logits.max(dim=-1)[0])
@@ -136,13 +138,15 @@ class LitSparseInst(pl.LightningModule):
                     maskmaps[batch_idx,0,:,:] = torch.maximum(maskmaps[batch_idx,0,:,:], mask_preds[batch_idx,inst_idx,:,:] * pseudo_color(inst_idx+1, channel=0))
                     maskmaps[batch_idx,1,:,:] = torch.maximum(maskmaps[batch_idx,1,:,:], mask_preds[batch_idx,inst_idx,:,:] * pseudo_color(inst_idx+1, channel=1))
                     maskmaps[batch_idx,2,:,:] = torch.maximum(maskmaps[batch_idx,2,:,:], mask_preds[batch_idx,inst_idx,:,:] * pseudo_color(inst_idx+1, channel=2))
+                    inst_idxs_list[batch_idx].append(inst_idx)
 
         # Draw iam
         max_num_iam = 5
         iammaps = [torch.ones_like(resized_images) for _ in range(min(self.num_instances, max_num_iam))]
         for batch_idx in range(batch):
-            for inst_idx in range(min(self.num_instances, max_num_iam)):
-                iammap = iammaps[inst_idx]
+            inst_idxs = inst_idxs_list[batch_idx][:max_num_iam]
+            for i, inst_idx in enumerate(inst_idxs):
+                iammap = iammaps[i]
                 iammap[batch_idx,1,:,:] = (1-iam[batch_idx,inst_idx,:,:]*20)
                 iammap[batch_idx,2,:,:] = (1-iam[batch_idx,inst_idx,:,:]*20)
 
