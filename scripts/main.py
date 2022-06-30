@@ -208,7 +208,7 @@ if __name__ == '__main__':
             num_instances=args.num_instances,
             score_threshold=args.score_threshold,
             mask_threshold=args.mask_threshold)
-        model.load_state_dict(torch.load(args.load_model))
+        model.load_state_dict(torch.load(args.load_model), strict=False)
         model.eval()
         if args.mixed_precision:
             # Needs CUDA to support FP16
