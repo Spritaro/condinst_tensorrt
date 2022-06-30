@@ -7,46 +7,46 @@ from torch import nn
 import torchvision
 
 
-class PyramidPoolingModule(nn.Module):
-    def __init__(self, in_channels, channels):
-        super().__init__()
+# class PyramidPoolingModule(nn.Module):
+#     def __init__(self, in_channels, channels):
+#         super().__init__()
 
-        def conv1x1_bn_relu(in_channels, out_channels):
-            layers = []
-            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=1, padding=0, bias=False))
-            layers.append(nn.BatchNorm2d(out_channels))
-            layers.append(nn.ReLU(inplace=True))
-            return nn.Sequential(*layers)
-        self.convs = nn.ModuleList([conv1x1_bn_relu(in_channels, channels) for i in range(4)])
-        self.out_conv = conv1x1_bn_relu(in_channels+channels*4, in_channels)
-        return
+#         def conv1x1_bn_relu(in_channels, out_channels):
+#             layers = []
+#             layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=1, padding=0, bias=False))
+#             layers.append(nn.BatchNorm2d(out_channels))
+#             layers.append(nn.ReLU(inplace=True))
+#             return nn.Sequential(*layers)
+#         self.convs = nn.ModuleList([conv1x1_bn_relu(in_channels, channels) for i in range(4)])
+#         self.out_conv = conv1x1_bn_relu(in_channels+channels*4, in_channels)
+#         return
 
-    def forward(self, in_feature):
-        """
-        Params:
-            in_feature: Tensor[batch, D, H, W]
-        Returns:
-            out_feature: Tensor[batch, D, H, W]
-        """
-        batch, D, H, W = in_feature.shape
+#     def forward(self, in_feature):
+#         """
+#         Params:
+#             in_feature: Tensor[batch, D, H, W]
+#         Returns:
+#             out_feature: Tensor[batch, D, H, W]
+#         """
+#         batch, D, H, W = in_feature.shape
 
-        # NOTE: TensorRT7 does not support F.adaptive_avg_pool2d
-        def adaptive_avg_pool2d(feature, output_size):
-            stride = (H//output_size, W//output_size)
-            kernel_size = (H-(output_size-1)*stride[0], W-(output_size-1)*stride[1])
-            feature = F.avg_pool2d(feature, kernel_size=kernel_size, stride=kernel_size, padding=0)
-            return feature
-        output_sizes = [1, 2, 3, 6]
-        xs = [in_feature]
-        for output_size, conv in zip(output_sizes, self.convs):
-            x = adaptive_avg_pool2d(in_feature, output_size)
-            x = conv(x)
-            x = F.interpolate(x, size=(H, W), mode='bilinear', align_corners=False)
-            xs.append(x)
+#         # NOTE: TensorRT7 does not support F.adaptive_avg_pool2d
+#         def adaptive_avg_pool2d(feature, output_size):
+#             stride = (H//output_size, W//output_size)
+#             kernel_size = (H-(output_size-1)*stride[0], W-(output_size-1)*stride[1])
+#             feature = F.avg_pool2d(feature, kernel_size=kernel_size, stride=kernel_size, padding=0)
+#             return feature
+#         output_sizes = [1, 2, 3, 6]
+#         xs = [in_feature]
+#         for output_size, conv in zip(output_sizes, self.convs):
+#             x = adaptive_avg_pool2d(in_feature, output_size)
+#             x = conv(x)
+#             x = F.interpolate(x, size=(H, W), mode='bilinear', align_corners=False)
+#             xs.append(x)
 
-        x = torch.cat(xs, dim=1)
-        out_feature = self.out_conv(x)
-        return out_feature
+#         x = torch.cat(xs, dim=1)
+#         out_feature = self.out_conv(x)
+#         return out_feature
 
 
 class Encoder(nn.Module):
@@ -62,7 +62,7 @@ class Encoder(nn.Module):
         self.lateral_conv4 = conv1x1_bn(1024, num_channels)
         self.lateral_conv5 = conv1x1_bn(2048, num_channels)
 
-        self.ppm = PyramidPoolingModule(num_channels, num_channels//4)
+        # self.ppm = PyramidPoolingModule(num_channels, num_channels//4)
 
         def conv3x3_bn(in_channels, out_channels):
             layers = []
@@ -91,7 +91,8 @@ class Encoder(nn.Module):
         l5 = self.lateral_conv5(c5)
         l4 = self.lateral_conv4(c4)
         l3 = self.lateral_conv3(c3)
-        p5 = self.ppm(l5) # Pyramid Pooling Module
+        # p5 = self.ppm(l5) # TensorRT7 does not support adaptive_avg_pool nor avg_pool with dynamic kernel
+        p5 = l5
         p4 = l4 + F.interpolate(p5, scale_factor=2, mode='bilinear', align_corners=False)
         p3 = l3 + F.interpolate(p4, scale_factor=2, mode='bilinear', align_corners=False)
 
