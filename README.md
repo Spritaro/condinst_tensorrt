@@ -53,7 +53,7 @@ Please note that this is not a faithful implementation of the paper.
         --input_width 640 \
         --input_height 480 \
         --num_classes 80 \
-        --topk 40 \
+        --num_instances 100 \
         --mixed_precision True \
         train \
         --train_dir <path/to/train/image/directory> \
@@ -85,7 +85,7 @@ Please note that this is not a faithful implementation of the paper.
         --input_width 640 \
         --input_height 480 \
         --num_classes 80 \
-        --topk 40 \
+        --num_instances 100 \
         --mixed_precision True \
         eval \
         --val_dir <path/to/validation/image/directory> \
@@ -104,7 +104,7 @@ Please note that this is not a faithful implementation of the paper.
         --input_width 640 \
         --input_height 480 \
         --num_classes 80 \
-        --topk 40 \ # Max number of detection
+        --num_instances 100 \ # Max number of detection
         --mixed_precision True \
         test \
         --test_image_dir <path/to/image/directory> \
@@ -120,7 +120,7 @@ Please note that this is not a faithful implementation of the paper.
         --input_width 640 \
         --input_height 480 \
         --num_classes 80 \
-        --topk 40 \ # Max number of detection
+        --num_instances 100 \ # Max number of detection
         --mixed_precision True \
         export \
         --load_model <path/to/model.pt> \
