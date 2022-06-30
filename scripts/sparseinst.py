@@ -272,9 +272,10 @@ class SparseInst(nn.Module):
         dtype = feature.dtype
         device = feature.device
 
+        # NOTE: TensorRT7 does not support INT32 types for the NEG operator.
         # NOTE: TensorRT7 does not support float range operation. Use cast instead.
-        coord_x = torch.arange(-W, W, 2, dtype=torch.int32, device=device) # [W]
-        coord_y = torch.arange(-H, H, 2, dtype=torch.int32, device=device) # [H]
+        coord_x = torch.arange(0, W, 1, dtype=torch.int32, device=device) # [W]
+        coord_y = torch.arange(0, H, 1, dtype=torch.int32, device=device) # [H]
         coord_x = coord_x.to(dtype) / W
         coord_y = coord_y.to(dtype) / H
         coord_y, coord_x = torch.meshgrid(coord_y, coord_x) # [H, W], [H, W]
