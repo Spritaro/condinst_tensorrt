@@ -38,20 +38,37 @@ def calc_dice_loss(inputs, targets, eps=1e-6):
         targets: Tensor[N, *]
         smooth:
     Returns:
-        dice_loss: Tensor[]
+        dice_loss: Tensor[N]
     """
-    # Convert to FP32 to avoid NaN
+    N = inputs.shape[0]
+    inputs = inputs.view(N, -1)
+    targets = targets.view(N, -1)
     dtype = inputs.dtype
+
+    # Convert to FP32 to avoid NaN
     inputs = inputs.type(torch.float32)
     targets = targets.type(torch.float32)
 
-    inputs = inputs.view(-1)
-    targets = targets.view(-1)
-    dice = (2 * (inputs*targets).sum()) / ((inputs*inputs).sum() + (targets*targets).sum() + eps)
+    dice = (2 * (inputs*targets).sum(dim=1)) / ((inputs*inputs).sum(dim=1) + (targets*targets).sum(dim=1) + eps)
 
     dice = dice.type(dtype)
     return 1 - dice
 
+def calc_bce_loss(inputs, targets):
+    """
+    Params:
+        inputs: Tensor[N, *]
+        targets: Tensor[N, *]
+        smooth:
+    Returns:
+        bce_loss: Tensor[N]
+    """
+    N = inputs.shape[0]
+    inputs = inputs.view(N, -1)
+    targets = targets.view(N, -1)
+
+    bce_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction='none')
+    return bce_loss.mean(dim=-1)
 
 class SparseInstLoss(nn.Module):
     def __init__(self):
@@ -239,7 +256,7 @@ class SparseInstLoss(nn.Module):
         stack_mask_logits = mask_logits[inst_idxs,:,:] # [min(N, K), maskH, maskW]
         stack_mask_preds = mask_preds[inst_idxs,:,:] # [min(N, K), maskH, maskW]
         stack_mask_targets = mask_targets[target_idxs,:,:] # [min(N, K), maskH, maskW]
-        dice_loss = calc_dice_loss(stack_mask_preds, stack_mask_targets) # []
-        bce_loss = F.binary_cross_entropy_with_logits(stack_mask_logits, stack_mask_targets, reduction='mean') # []
+        dice_loss = calc_dice_loss(stack_mask_preds, stack_mask_targets) # [min(N, K)]
+        bce_loss = calc_bce_loss(stack_mask_logits, stack_mask_targets) # [min(N, K)]
         mask_loss = dice_loss + bce_loss
-        return mask_loss
+        return mask_loss.mean()
