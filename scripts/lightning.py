@@ -8,7 +8,7 @@ from loss import SparseInstLoss
 from mean_average_precision import MeanAveragePrecision
 
 class LitSparseInst(pl.LightningModule):
-    def __init__(self, mode, input_channels, num_classes, num_instances,
+    def __init__(self, mode, input_height, input_width, input_channels, num_classes, num_instances,
                 learning_rate=None, score_threshold=0.3, mask_threshold=0.5,
                 class_loss_factor=2.0, score_loss_factor=1.0, mask_loss_factor=2.0):
         super().__init__()
@@ -20,7 +20,7 @@ class LitSparseInst(pl.LightningModule):
         self.score_loss_factor = score_loss_factor
         self.mask_loss_factor = mask_loss_factor
 
-        self.sparseinst = SparseInst(mode, input_channels, num_classes, num_instances)
+        self.sparseinst = SparseInst(mode, input_height, input_width, input_channels, num_classes, num_instances)
         self.sparseinst_loss = SparseInstLoss()
 
         # mAP calculation

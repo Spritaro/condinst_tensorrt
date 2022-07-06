@@ -7,50 +7,54 @@ from torch import nn
 import torchvision
 
 
-# class PyramidPoolingModule(nn.Module):
-#     def __init__(self, in_channels, channels):
-#         super().__init__()
+class PyramidPoolingModule(nn.Module):
+    def __init__(self, input_size, in_channels, channels):
+        super().__init__()
 
-#         def conv1x1_bn_relu(in_channels, out_channels):
-#             layers = []
-#             layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=1, padding=0, bias=False))
-#             layers.append(nn.BatchNorm2d(out_channels))
-#             layers.append(nn.ReLU(inplace=True))
-#             return nn.Sequential(*layers)
-#         self.convs = nn.ModuleList([conv1x1_bn_relu(in_channels, channels) for i in range(4)])
-#         self.out_conv = conv1x1_bn_relu(in_channels+channels*4, in_channels)
-#         return
+        output_sizes = [1, 2, 3, 6]
+        # NOTE: TensorRT7 does not support adaptive_avg_pool2d or dynamic avg_pool2d
+        def adaptive_avg_pool2d(input_size, output_size):
+            H, W = input_size
+            stride = (H//output_size, W//output_size)
+            kernel_size = (H-(output_size-1)*stride[0], W-(output_size-1)*stride[1])
+            avg_pool2d = nn.AvgPool2d(kernel_size=kernel_size, stride=kernel_size, padding=0)
+            return avg_pool2d
+        self.avg_pool2ds = nn.ModuleList([adaptive_avg_pool2d(input_size, output_size) for output_size in output_sizes])
 
-#     def forward(self, in_feature):
-#         """
-#         Params:
-#             in_feature: Tensor[batch, D, H, W]
-#         Returns:
-#             out_feature: Tensor[batch, D, H, W]
-#         """
-#         batch, D, H, W = in_feature.shape
+        def conv1x1_bn_relu(in_channels, out_channels):
+            layers = []
+            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=1, padding=0, bias=False))
+            layers.append(nn.BatchNorm2d(out_channels))
+            layers.append(nn.ReLU(inplace=True))
+            return nn.Sequential(*layers)
+        self.convs = nn.ModuleList([conv1x1_bn_relu(in_channels, channels) for i in range(4)])
 
-#         # NOTE: TensorRT7 does not support F.adaptive_avg_pool2d
-#         def adaptive_avg_pool2d(feature, output_size):
-#             stride = (H//output_size, W//output_size)
-#             kernel_size = (H-(output_size-1)*stride[0], W-(output_size-1)*stride[1])
-#             feature = F.avg_pool2d(feature, kernel_size=kernel_size, stride=kernel_size, padding=0)
-#             return feature
-#         output_sizes = [1, 2, 3, 6]
-#         xs = [in_feature]
-#         for output_size, conv in zip(output_sizes, self.convs):
-#             x = adaptive_avg_pool2d(in_feature, output_size)
-#             x = conv(x)
-#             x = F.interpolate(x, size=(H, W), mode='bilinear', align_corners=False)
-#             xs.append(x)
+        self.out_conv = conv1x1_bn_relu(in_channels+channels*4, in_channels)
+        return
 
-#         x = torch.cat(xs, dim=1)
-#         out_feature = self.out_conv(x)
-#         return out_feature
+    def forward(self, in_feature):
+        """
+        Params:
+            in_feature: Tensor[batch, D, H, W]
+        Returns:
+            out_feature: Tensor[batch, D, H, W]
+        """
+        batch, D, H, W = in_feature.shape
+
+        xs = [in_feature]
+        for avg_pool2d, conv in zip(self.avg_pool2ds, self.convs):
+            x = avg_pool2d(in_feature)
+            x = conv(x)
+            x = F.interpolate(x, size=(H, W), mode='bilinear', align_corners=False)
+            xs.append(x)
+
+        x = torch.cat(xs, dim=1)
+        out_feature = self.out_conv(x)
+        return out_feature
 
 
 class Encoder(nn.Module):
-    def __init__(self, num_channels):
+    def __init__(self, input_height, input_width, num_channels):
         super().__init__()
 
         def conv1x1_bn(in_channels, out_channels):
@@ -62,7 +66,8 @@ class Encoder(nn.Module):
         self.lateral_conv4 = conv1x1_bn(1024, num_channels)
         self.lateral_conv5 = conv1x1_bn(2048, num_channels)
 
-        # self.ppm = PyramidPoolingModule(num_channels, num_channels//4)
+        input_size = (input_height//32, input_width//32)
+        self.ppm = PyramidPoolingModule(input_size, num_channels, num_channels//4)
 
         def conv3x3_bn(in_channels, out_channels):
             layers = []
@@ -91,8 +96,8 @@ class Encoder(nn.Module):
         l5 = self.lateral_conv5(c5)
         l4 = self.lateral_conv4(c4)
         l3 = self.lateral_conv3(c3)
-        # p5 = self.ppm(l5) # TensorRT7 does not support adaptive_avg_pool nor avg_pool with dynamic kernel
-        p5 = l5
+        p5 = self.ppm(l5)
+        # p5 = l5
         p4 = l4 + F.interpolate(p5, scale_factor=2, mode='bilinear', align_corners=False)
         p3 = l3 + F.interpolate(p4, scale_factor=2, mode='bilinear', align_corners=False)
 
@@ -212,7 +217,7 @@ class Decoder(nn.Module):
 
 
 class SparseInst(nn.Module):
-    def __init__(self, mode, input_channels, num_classes, num_instances):
+    def __init__(self, mode, input_height, input_width, input_channels, num_classes, num_instances):
         super().__init__()
         assert mode in ['training', 'inference']
         self.mode = mode
@@ -221,7 +226,7 @@ class SparseInst(nn.Module):
 
         self.backbone = torchvision.models.resnet50(pretrained=True)
 
-        self.encoder = Encoder(num_channels)
+        self.encoder = Encoder(input_height, input_width, num_channels)
         self.decoder = Decoder(num_classes, num_instances, num_channels, num_kernel_channels)
 
         # def freeze_bn(m):

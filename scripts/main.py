@@ -151,6 +151,8 @@ if __name__ == '__main__':
         # Create model for training
         model = LitSparseInst(
             mode='training',
+            input_height=args.input_height,
+            input_width=args.input_width,
             input_channels=args.input_channels,
             num_classes=args.num_classes,
             num_instances=args.num_instances,
@@ -204,6 +206,8 @@ if __name__ == '__main__':
         model = LitSparseInst(
             mode='inference',
             input_channels=args.input_channels,
+            input_height=args.input_height,
+            input_width=args.input_width,
             num_classes=args.num_classes,
             num_instances=args.num_instances,
             score_threshold=args.score_threshold,
