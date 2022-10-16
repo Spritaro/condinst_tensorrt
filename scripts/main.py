@@ -58,6 +58,7 @@ parser_train.add_argument('--resume_from_checkpoint', type=str, default=None, he
 parser_train.add_argument('--max_epochs', type=int, default=10, help="number of epochs (default 10")
 parser_train.add_argument('--gpus', type=int, default=1, help="number of GPUs to train (0 for CPU, -1 for all GPUs) (default 1)")
 parser_train.add_argument('--learning_rate', type=float, default=5e-5, help="learning rate (default 5e-5)")
+parser_train.add_argument('--warmup_steps', type=int, default=100, help="number of steps for learning rate warm-up (default 100)")
 # Logging options
 parser_train.add_argument('--tensorboard_log_dir', type=str, default='../runs', help="path to TensorBoard log dir (default '../runs')")
 # Output options
@@ -157,6 +158,7 @@ if __name__ == '__main__':
             num_classes=args.num_classes,
             num_instances=args.num_instances,
             learning_rate=args.learning_rate,
+            warmup_steps=args.warmup_steps,
             score_threshold=args.score_threshold,
             mask_threshold=args.mask_threshold)
 

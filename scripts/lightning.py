@@ -9,11 +9,12 @@ from mean_average_precision import MeanAveragePrecision
 
 class LitSparseInst(pl.LightningModule):
     def __init__(self, mode, input_height, input_width, input_channels, num_classes, num_instances,
-                learning_rate=None, score_threshold=0.3, mask_threshold=0.5,
+                learning_rate=None, warmup_steps=100, score_threshold=0.3, mask_threshold=0.5,
                 class_loss_factor=2.0, score_loss_factor=1.0, mask_loss_factor=2.0):
         super().__init__()
         self.num_instances = num_instances
         self.learning_rate = learning_rate
+        self.warmup_steps = warmup_steps
         self.score_threshold = score_threshold
         self.mask_threshold = mask_threshold
         self.class_loss_factor = class_loss_factor
@@ -104,7 +105,16 @@ class LitSparseInst(pl.LightningModule):
         # optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, eps=1e-6)
         # optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0.9, weight_decay=1e-4, nesterov=True)
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=1e-4)
-        return optimizer
+
+        def warmup_lr(epoch):
+            if self.trainer.global_step < self.warmup_steps:
+                lr_scale = min(1., float(self.trainer.global_step + 1) / float(self.warmup_steps))
+            else:
+                lr_scale = 1.
+            return lr_scale
+
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warmup_lr)
+        return [optimizer], [scheduler]
 
     def concat_images_and_masks(self, images, class_logits, score_logits, mask_preds, iam=None):
         """
