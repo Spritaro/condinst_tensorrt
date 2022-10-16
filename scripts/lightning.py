@@ -6,6 +6,7 @@ import pytorch_lightning as pl
 from sparseinst import SparseInst
 from loss import SparseInstLoss
 from mean_average_precision import MeanAveragePrecision
+from loss_logger import LossLogger
 
 class LitSparseInst(pl.LightningModule):
     def __init__(self, mode, input_height, input_width, input_channels, num_classes, num_instances,
@@ -23,6 +24,9 @@ class LitSparseInst(pl.LightningModule):
 
         self.sparseinst = SparseInst(mode, input_height, input_width, input_channels, num_classes, num_instances)
         self.sparseinst_loss = SparseInstLoss()
+
+        self.train_loss_logger = LossLogger(class_loss=0, score_loss=0, mask_loss=0, loss=0)
+        self.val_loss_logger = LossLogger(val_class_loss=0, val_score_loss=0, val_mask_loss=0, val_loss=0)
 
         # mAP calculation
         self.map = MeanAveragePrecision(
@@ -46,14 +50,14 @@ class LitSparseInst(pl.LightningModule):
                 self.mask_loss_factor * mask_loss)
 
         # TensorBoard
+        self.train_loss_logger.add_losses(
+            class_loss=class_loss, score_loss=score_loss, mask_loss=mask_loss, loss=loss)
         if batch_idx % self.trainer.accumulate_grad_batches == 0:
             # Display loss
-            tensorboard = self.logger.experiment
-            tensorboard.add_scalar("class_loss", class_loss, self.global_step)
-            tensorboard.add_scalar("score_loss", score_loss, self.global_step)
-            tensorboard.add_scalar("mask_loss", mask_loss, self.global_step)
-            tensorboard.add_scalar("loss", loss, self.global_step)
+            self.train_loss_logger.dispaly_losses(self.logger, self.global_step)
+
             # Display masks
+            tensorboard = self.logger.experiment
             mask_preds = torch.sigmoid(mask_logits)
             images_and_masks = self.concat_images_and_masks(images[:,:3,:,:], class_logits, score_logits, mask_preds, iam)
             img_grid = torchvision.utils.make_grid(images_and_masks, nrow=images.shape[0])
@@ -75,11 +79,9 @@ class LitSparseInst(pl.LightningModule):
                 self.mask_loss_factor * mask_loss)
 
         # TensorBoard
-        tensorboard = self.logger.experiment
-        tensorboard.add_scalar("val_class_loss", class_loss, self.global_step)
-        tensorboard.add_scalar("val_score_loss", score_loss, self.global_step)
-        tensorboard.add_scalar("val_mask_loss", mask_loss, self.global_step)
-        tensorboard.add_scalar("val_loss", loss, self.global_step)
+        self.val_loss_logger.add_losses(
+            val_class_loss=class_loss, val_score_loss=score_loss, val_mask_loss=mask_loss, val_loss=loss)
+        self.val_loss_logger.dispaly_losses(self.logger, self.global_step)
 
         # ModelCheckpoint metrics
         self.log("val_loss", loss)
