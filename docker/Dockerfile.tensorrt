@@ -46,8 +46,10 @@ RUN pip3 install \
     -f https://download.pytorch.org/whl/torch_stable.html
 RUN pip3 install \
     albumentations==1.1.0 \
-    pytorch-lightning \
-    matplotlib
+    matplotlib \
+    "pillow<10.0.0" \
+    pytorch-lightning==1.7.0 \
+    torchmetrics==0.11.4
 
 # Reinstall OpenCV
 RUN pip3 uninstall -y opencv-python && pip3 install opencv-python

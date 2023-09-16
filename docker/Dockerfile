@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.1-cudnn8-devel
+FROM ubuntu:20.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -42,7 +42,11 @@ RUN pip3 install \
     -f https://download.pytorch.org/whl/torch_stable.html
 RUN pip3 install \
     albumentations==1.1.0 \
-    pytorch-lightning
+    matplotlib \
+    "pillow<10.0.0" \
+    pytorch-lightning==1.7.0 \
+    setuptools==59.5.0 \
+    torchmetrics==0.11.4
 
 # Reinstall OpenCV
 RUN pip3 uninstall -y opencv-python && pip3 install opencv-python
