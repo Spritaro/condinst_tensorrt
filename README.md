@@ -58,7 +58,6 @@ This implementation utilizes heatmap-based object detection. Please see [CornerN
         --accumulate_grad_batches 16 \
         --num_workers 4 \
         --max_epochs 10 \
-        --gpus 1 \
         --learning_rate 0.01 \
         --save_model <path/to/model.pt>
     ```
@@ -85,7 +84,6 @@ This implementation utilizes heatmap-based object detection. Please see [CornerN
         --val_ann <path/to/validation/annotation/file> \
         --batch_size 8 \
         --num_workers 4 \
-        --gpus 1 \
         --load_model <path/to/model.pt>
     ```
 

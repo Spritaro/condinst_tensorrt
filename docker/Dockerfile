@@ -41,15 +41,12 @@ RUN git clone https://github.com/philferriere/cocoapi.git \
 
 # Install pytorch
 RUN pip3 install \
-    torch==1.9.0+cu111 \
-    torchvision==0.10.0+cu111 \
-    -f https://download.pytorch.org/whl/torch_stable.html
-RUN pip3 install \
     albumentations==1.1.0 \
-    matplotlib \
-    "pillow<10.0.0" \
-    pytorch-lightning==1.7.0 \
-    torchmetrics==0.11.4
+    matplotlib==3.7.3 \
+    pytorch-lightning==2.0.9 \
+    tensorboard==2.14.0 \
+    torch==2.0.1 \
+    torchvision==0.15.2
 
 # Reinstall OpenCV
 RUN pip3 uninstall -y opencv-python && pip3 install opencv-python

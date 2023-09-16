@@ -126,7 +126,8 @@ class LitCondInst(pl.LightningModule):
 
             # Draw mask
             # NOTE: In order to visualize mask learning process, thresholding is not applied
-            masks = self.condinst.generate_mask(ctr_logits[i], mask_logits[i], points[0])
+            with torch.no_grad():
+                masks = self.condinst.generate_mask(ctr_logits[i], mask_logits[i], points[0])
             for no_obj in range(num_objects):
                 maskmaps[i,0,:,:] = torch.maximum(maskmaps[i,0,:,:], masks[no_obj] * (float(no_obj+1)%8/7))
                 maskmaps[i,1,:,:] = torch.maximum(maskmaps[i,1,:,:], masks[no_obj] * (float(no_obj+1)%4/3))

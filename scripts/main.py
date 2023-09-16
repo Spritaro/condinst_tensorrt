@@ -56,7 +56,6 @@ parser_train.add_argument('--accumulate_grad_batches', type=int, default=16, hel
 parser_train.add_argument('--num_workers', type=int, default=4, help="number of workers for data loader (default 4)")
 parser_train.add_argument('--resume_from_checkpoint', type=str, default=None, help="path to checkpoint file (optional)")
 parser_train.add_argument('--max_epochs', type=int, default=10, help="number of epochs (default 10")
-parser_train.add_argument('--gpus', type=int, default=1, help="number of GPUs to train (0 for CPU, -1 for all GPUs) (default 1)")
 parser_train.add_argument('--learning_rate', type=float, default=0.01, help="learning rate (default 0.01)")
 # Logging options
 parser_train.add_argument('--tensorboard_log_dir', type=str, default='../runs', help="path to TensorBoard log dir (default '../runs')")
@@ -73,7 +72,6 @@ parser_eval.add_argument('--val_depth', type=str, default=None, required=False, 
 # Evaluation options
 parser_eval.add_argument('--batch_size', type=int, default=8, help="batch size (default 8)")
 parser_eval.add_argument('--num_workers', type=int, default=4, help="number of workers for data loader (default 4)")
-parser_eval.add_argument('--gpus', type=int, default=1, help="number of GPUs to train (0 for CPU, -1 for all GPUs) (default 1)")
 parser_eval.add_argument('--load_model', type=str, default='../models/model.pt', help="path to trained model (default '../models/model.py')")
 # Logging options
 parser_eval.add_argument('--tensorboard_log_dir', type=str, default='../runs', help="path to TensorBoard log dir (default '../runs')")
@@ -178,15 +176,13 @@ if __name__ == '__main__':
         # Train model
         trainer = pl.Trainer(
             max_epochs=args.max_epochs,
-            gpus=args.gpus,
             val_check_interval=1.0, # validate once per epoch
             accumulate_grad_batches=args.accumulate_grad_batches,
             callbacks=[checkpoint_callback],
-            resume_from_checkpoint=args.resume_from_checkpoint,
             precision=precision,
             logger=tb_logger
         )
-        trainer.fit(model, coco_train, coco_val)
+        trainer.fit(model, coco_train, coco_val, ckpt_path=args.resume_from_checkpoint)
 
         # Save model
         os.makedirs(os.path.dirname(args.save_model), exist_ok=True)
@@ -238,7 +234,6 @@ if __name__ == '__main__':
             # Evaluate model
             trainer = pl.Trainer(
                 max_epochs=1,
-                gpus=args.gpus,
                 precision=precision,
                 logger=tb_logger
             )
