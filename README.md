@@ -15,14 +15,7 @@ This implementation utilizes heatmap-based object detection. Please see [CornerN
 - Build docker image.
     ```sh
     $ cd docker
-    $ docker build -t condinst_tensorrt -f Dockerfile.tensorrt .
-    ```
-
-- To build docker image without TensorRT, run the following command instead.
-
-    ```sh
-    $ cd docker
-    $ docker build -t condinst_tensorrt .
+    $ docker build -t condinst_tensorrt -f Dockerfile .
     ```
 
 - To build docker image on Jetson, run the following command.

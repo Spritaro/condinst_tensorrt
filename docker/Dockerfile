@@ -1,4 +1,8 @@
-FROM ubuntu:20.04
+FROM nvcr.io/nvidia/tensorrt:20.12-py3
+# TensorRT 7.2.2
+# CUDA 11.1.1
+# cuDNN 8.0.5
+# Python 3.8.5
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -30,7 +34,7 @@ RUN wget https://bootstrap.pypa.io/get-pip.py && \
 	rm get-pip.py
 
 # Install COCOAPI
-RUN pip3 install --upgrade cython numpy
+RUN pip3 install --upgrade cython
 RUN git clone https://github.com/philferriere/cocoapi.git \
     && cd cocoapi/PythonAPI \
     && python3 setup.py build_ext install --user
@@ -45,7 +49,6 @@ RUN pip3 install \
     matplotlib \
     "pillow<10.0.0" \
     pytorch-lightning==1.7.0 \
-    setuptools==59.5.0 \
     torchmetrics==0.11.4
 
 # Reinstall OpenCV
