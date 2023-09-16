@@ -41,7 +41,7 @@ RUN git clone https://github.com/philferriere/cocoapi.git \
 
 # Install pytorch
 RUN pip3 install \
-    albumentations==1.1.0 \
+    albumentations==1.3.0 \
     matplotlib==3.7.3 \
     pytorch-lightning==2.0.9 \
     tensorboard==2.14.0 \

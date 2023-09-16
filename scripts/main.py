@@ -103,7 +103,7 @@ if __name__ == '__main__':
         # Transform for training
         transform_train = A.Compose([
             A.Affine(scale={'x': (0.7, 1.5), 'y': (0.7, 1.5)}, translate_percent={'x': (-0.5, 0.5), 'y': (-0.2, 0.2)}, rotate=(-90, 90), interpolation=cv2.INTER_LINEAR, mode=cv2.BORDER_CONSTANT, p=0.8),
-            A.transforms.PadIfNeeded(min_width=args.input_width, min_height=args.input_height, border_mode=cv2.BORDER_CONSTANT, value=0),
+            A.PadIfNeeded(min_width=args.input_width, min_height=args.input_height, border_mode=cv2.BORDER_CONSTANT, value=0),
             A.RandomCrop(width=args.input_width, height=args.input_height),
             A.HorizontalFlip(p=0.5),
             A.RandomBrightnessContrast(p=0.5),
@@ -116,11 +116,11 @@ if __name__ == '__main__':
         ann_path_train = os.path.expanduser(args.train_ann)
         depth_dir_train = os.path.expanduser(args.train_depth) if args.train_depth is not None else None
         dataset_train = CocoSegmentationAlb(root=root_dir_train, annFile=ann_path_train, depthDir=depth_dir_train, transform=transform_train)
-        coco_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, collate_fn=lambda x: x, pin_memory=True)
+        coco_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, collate_fn=lambda x: x)
 
         if args.val_dir and args.val_ann:
             transform_val = A.Compose([
-                A.transforms.PadIfNeeded(min_width=args.input_width, min_height=args.input_height, border_mode=cv2.BORDER_CONSTANT, value=0),
+                A.PadIfNeeded(min_width=args.input_width, min_height=args.input_height, border_mode=cv2.BORDER_CONSTANT, value=0),
                 A.CenterCrop(width=args.input_width, height=args.input_height),
                 A.Normalize(mean=args.mean, std=args.std),
                 ToTensorV2(),
@@ -209,7 +209,7 @@ if __name__ == '__main__':
 
             # Transform for eval
             transform = A.Compose([
-                A.transforms.PadIfNeeded(min_width=args.input_width, min_height=args.input_height, border_mode=cv2.BORDER_CONSTANT, value=0),
+                A.PadIfNeeded(min_width=args.input_width, min_height=args.input_height, border_mode=cv2.BORDER_CONSTANT, value=0),
                 A.CenterCrop(width=args.input_width, height=args.input_height),
                 A.Normalize(mean=args.mean, std=args.std),
                 ToTensorV2(),
