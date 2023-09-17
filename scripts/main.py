@@ -180,6 +180,7 @@ if __name__ == '__main__':
             accumulate_grad_batches=args.accumulate_grad_batches,
             callbacks=[checkpoint_callback],
             precision=precision,
+            accelerator="auto",
             logger=tb_logger
         )
         trainer.fit(model, coco_train, coco_val, ckpt_path=args.resume_from_checkpoint)
@@ -235,6 +236,7 @@ if __name__ == '__main__':
             trainer = pl.Trainer(
                 max_epochs=1,
                 precision=precision,
+                accelerator="auto",
                 logger=tb_logger
             )
             results = trainer.test(model, coco_val, ckpt_path=None)
