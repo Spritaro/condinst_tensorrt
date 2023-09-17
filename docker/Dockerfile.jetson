@@ -29,14 +29,13 @@ WORKDIR /home/$USERNAME
 
 # Install latest pip
 ENV PATH=/home/appuser/.local/bin:${PATH}
-RUN wget https://bootstrap.pypa.io/get-pip.py && \
+RUN wget https://bootstrap.pypa.io/pip/3.6/get-pip.py && \
 	python3 get-pip.py --user && \
 	rm get-pip.py
 
-# Install pytorch-lightning
+# Install dependencies
 RUN pip3 install \
-    pytorch-lightning \
-    albumentations==1.1.0
-
-# Reinstall OpenCV
-RUN pip3 uninstall -y opencv-python && pip3 install opencv-python
+    opencv-python==4.5.5.64 \
+    pytorch-lightning==1.5.10 \
+    scikit-image==0.16.2
+RUN pip install albumentations==1.3.0 --no-binary qudida,albumentations

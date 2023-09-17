@@ -8,7 +8,7 @@ docker run -it --rm \
     -v $1:/home/appuser/condinst_tensorrt:rw \
     -v $2:/home/appuser/dataset:ro \
     -w /home/appuser/condinst_tensorrt \
-    --shm-size 512mb \
+    --shm-size 1gb \
     --privileged \
     condinst_tensorrt \
     bash
