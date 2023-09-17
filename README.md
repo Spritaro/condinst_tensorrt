@@ -18,7 +18,7 @@ This implementation utilizes heatmap-based object detection. Please see [CornerN
     $ docker build -t condinst_tensorrt -f Dockerfile .
     ```
 
-- To build docker image on Jetson, run the following command.
+- To build docker image on Jetson, run the following command. This image only works with JetPack<=4.6.
     ```sh
     $ cd docker
     $ docker build -t condinst_tensorrt -f Dockerfile.jetson .
