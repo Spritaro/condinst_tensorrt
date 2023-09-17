@@ -18,8 +18,8 @@ import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from lightning import LitCondInst
-from dataset import CocoSegmentationAlb
+from condinst_tensorrt.lightning import LitCondInst
+from condinst_tensorrt.dataset import CocoSegmentationAlb
 
 parser = argparse.ArgumentParser(description="Parameters for training and inference")
 subparsers = parser.add_subparsers(dest="command")

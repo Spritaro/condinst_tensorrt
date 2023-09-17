@@ -3,8 +3,8 @@ import torch.nn.functional as F
 import torchvision
 import pytorch_lightning as pl
 
-from condinst import CondInst, get_heatmap_peaks
-from mean_average_precision import MeanAveragePrecision
+from .condinst import CondInst, get_heatmap_peaks
+from .mean_average_precision import MeanAveragePrecision
 
 class LitCondInst(pl.LightningModule):
     def __init__(self, mode, input_channels, num_classes, topk,
