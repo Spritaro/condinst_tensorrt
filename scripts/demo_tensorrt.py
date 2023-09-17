@@ -63,7 +63,7 @@ class CondInst(object):
             stream_handle=self.stream.handle)
 
         # Transfer predictions back from the GPU.
-        for i in range(1, 3):
+        for i in range(1, 4):
             cuda.memcpy_dtoh_async(self.h_buffers[i], self.d_memories[i], self.stream)
 
         # Synchronize the stream
