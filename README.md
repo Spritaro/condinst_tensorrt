@@ -12,31 +12,38 @@ This implementation utilizes heatmap-based object detection. Please see [CornerN
 
 ## Setup
 
-- Build docker image.
+### Option 1: docker
+
+- Build and run docker image.
     ```sh
     $ cd docker
     $ docker build -t condinst_tensorrt -f Dockerfile .
-    ```
-
-- To build docker image on Jetson, run the following command. This image only works with JetPack<=4.6.
-    ```sh
-    $ cd docker
-    $ docker build -t condinst_tensorrt -f Dockerfile.jetson .
-    ```
-
-## Usage
-
-- Run docker container.
-    ```sh
-    $ cd docker
     $ ./run.sh <path/to/this/repository> <path/to/dataset/directory>
     ```
 
-- To run docker container on Jetson, run the following command instead.
+- On Jetson platform, run the following commands. This image only works with JetPack<=4.6.
     ```sh
     $ cd docker
+    $ docker build -t condinst_tensorrt -f Dockerfile.jetson .
     $ ./run_jetson.sh <path/to/this/repository> <path/to/dataset/directory>
     ```
+
+### Option2: venv
+
+- It is also possible to install this project on python virtual environment.
+    ```sh
+    # create and enter venv
+    $ python3 -m venv .venv
+    $ source .venv/bin/activate
+
+    # install in editable mode
+    $ pip3 install -e .
+    ```
+
+- Training, evaluating, testing, and exporting should work with this setup.
+- Please note that, in order to run TensorRT demo, CUDA and TensorRT need to be installed separately.
+
+## Usage
 
 ### Train
 

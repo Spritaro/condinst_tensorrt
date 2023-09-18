@@ -1,8 +1,10 @@
+.venv/
+runs/
 *.ckpt
+*.egg-info
 *.jpeg
 *.jpg
 *.onnx
 *.png
 *.pt
 *.pyc
-/runs

@@ -11,8 +11,8 @@ import torchvision
 # from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
 # from torchvision.ops.focal_loss import sigmoid_focal_loss
 
-from loss import heatmap_focal_loss
-from loss import dice_loss
+from .loss import heatmap_focal_loss
+from .loss import dice_loss
 
 def get_centroid_indices(masks):
     """
