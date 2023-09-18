@@ -12,6 +12,8 @@ This implementation utilizes heatmap-based object detection. Please see [CornerN
 
 ## Setup
 
+### Option 1: docker
+
 - Build docker image.
     ```sh
     $ cd docker
@@ -23,6 +25,21 @@ This implementation utilizes heatmap-based object detection. Please see [CornerN
     $ cd docker
     $ docker build -t condinst_tensorrt -f Dockerfile.jetson .
     ```
+
+### Option2: venv
+
+- It is also possible to install this project on python virtual environment.
+    ```sh
+    # create and enter venv
+    $ python3 -m venv .venv
+    $ source .venv/bin/activate
+
+    # install in editable mode
+    $ pip3 install -e .
+    ```
+
+- Training, evaluating, testing, and exporting should work with this setup.
+- Please note that, in order to run TensorRT demo, CUDA and TensorRT need to be installed separately.
 
 ## Usage
 
