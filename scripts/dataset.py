@@ -69,9 +69,7 @@ class CocoSegmentationAlb(CocoDetection):
         # Extract depth channel from masks and concatenate to image
         if self.depth_dir is not None:
             _, h, w = img.shape
-            rgbd = torch.zeros(size=(4, h, w), dtype=torch.float32)
-            rgbd[:3,:,:] = img
-            rgbd[3,:,:] = masks.pop(-1)
-            img = rgbd
+            depth = masks.pop(-1)
+            img = torch.cat([img, torch.unsqueeze(depth, 0)], dim=0)
 
         return img, target
