@@ -71,7 +71,7 @@ class CocoSegmentationAlb(CocoDetection):
             _, h, w = img.shape
             rgbd = torch.zeros(size=(4, h, w), dtype=torch.float32)
             rgbd[:3,:,:] = img
-            rgbd[3,:,:] = torch.from_numpy(masks.pop(-1))
+            rgbd[3,:,:] = masks.pop(-1)
             img = rgbd
 
         return img, target
